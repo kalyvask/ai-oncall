@@ -1,0 +1,20 @@
+{
+  "alert_id": "01J7D4TJ6NBJCO4V9W6RQXTC8R",
+  "tenant_id": "demo",
+  "fired_at": "2026-04-28T11:11:11.000Z",
+  "source": "grafana",
+  "severity": "warn",
+  "service": "shipping",
+  "signal": {
+    "kind": "metric_threshold",
+    "metric": "http.server.duration",
+    "agg": "p99",
+    "value_ms": 1900,
+    "threshold_ms": 1200,
+    "window_minutes": 5
+  },
+  "title": "shipping p99 latency 1.9s — coincides with batch ETL kickoff",
+  "description": "shipping latency degraded across all replicas. The hourly analytics ETL job started at 11:08Z and runs on the same node pool. Network and disk metrics show contention.",
+  "labels": {"env": "prod", "region": "us-east-1", "team": "logistics"},
+  "expected_focus_service": "analytics-etl"
+}

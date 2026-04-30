@@ -1,0 +1,69 @@
+{
+  "report_id": "0193f4f5-5088-7f66-e124-62cf48230606",
+  "tenant_id": "demo",
+  "alert": {
+    "alert_id": "01J7E5UK7PCKDP5VAW7RQXTC9S",
+    "tenant_id": "demo",
+    "fired_at": "2026-04-28T17:30:02.000Z",
+    "source": "pagerduty",
+    "severity": "page",
+    "service": "orders",
+    "signal": {"kind": "metric_threshold", "metric": "http.server.error_rate", "agg": "rate", "value_ms": 0, "threshold_ms": 0, "window_minutes": 5},
+    "title": "orders 5xx 18% — DNS resolution failures across services",
+    "labels": {"env": "prod", "region": "us-east-1", "team": "platform"}
+  },
+  "generated_at": "2026-04-28T17:30:33.880Z",
+  "model": {"provider": "mock", "id": "mock-deterministic"},
+  "investigation": {
+    "tool_calls": [
+      {"tool": "get_topology", "input": {"service": "orders", "depth": 3}, "result_summary": "many services in ERROR/WARN simultaneously: orders, checkout, search, cart", "result_size": 9, "duration_ms": 14},
+      {"tool": "query_logs", "input": {"service": "orders", "regex": "EAI_AGAIN|getaddrinfo|dns", "since": "2026-04-28T17:20:00Z", "limit": 25}, "result_summary": "21 ERROR lines: EAI_AGAIN getaddrinfo on internal hostnames", "result_size": 21, "duration_ms": 81},
+      {"tool": "query_logs", "input": {"service": "checkout", "regex": "EAI_AGAIN|getaddrinfo|dns", "since": "2026-04-28T17:20:00Z", "limit": 10}, "result_summary": "9 ERROR lines: same EAI_AGAIN signature", "result_size": 9, "duration_ms": 56},
+      {"tool": "get_recent_deploys", "input": {"service": "internal-dns", "since": "2026-04-28T15:00:00Z"}, "result_summary": "1 config rollout 12 min before alert: coredns ConfigMap update", "result_size": 1, "duration_ms": 91},
+      {"tool": "get_runbook", "input": {"service": "internal-dns"}, "result_summary": "runbook documents ConfigMap rollback", "result_size": 1, "duration_ms": 5}
+    ],
+    "tokens_in": 5234,
+    "tokens_out": 661,
+    "cost_usd": 0.020
+  },
+  "hypotheses": [
+    {
+      "root_cause_service": "internal-dns",
+      "root_cause_datetime": "2026-04-28T17:18:11Z",
+      "confidence": 0.88,
+      "reasoning": "Multiple unrelated services hit error simultaneously with the same EAI_AGAIN signature — the common dependency is internal DNS, not application code. A coredns ConfigMap rollout landed 12 minutes before the alert. The pattern is a DNS plane regression cascading downstream to anyone resolving internal hostnames.",
+      "evidence": [
+        {"claim": "orders, checkout, search, cart degraded simultaneously", "source": "tool_calls[0]"},
+        {"claim": "21 ERROR lines on orders: EAI_AGAIN getaddrinfo internal hostnames", "source": "tool_calls[1]"},
+        {"claim": "9 matching ERROR lines on checkout — same EAI_AGAIN signature", "source": "tool_calls[2]"},
+        {"claim": "coredns ConfigMap rolled out 12 min before alert", "source": "tool_calls[3]"}
+      ],
+      "recommended_action": "Roll back the coredns ConfigMap; see runbooks/internal-dns.md. Keep app rollbacks queued only if DNS rollback does not resolve in 5 min.",
+      "runbook_link": "runbooks/internal-dns.md"
+    },
+    {
+      "root_cause_service": "orders",
+      "root_cause_datetime": null,
+      "confidence": 0.07,
+      "reasoning": "orders is the alerting service but its code is unchanged. The simultaneous failure across unrelated services rules out an orders-specific regression.",
+      "evidence": [
+        {"claim": "no deploys to orders in last 24h", "source": "tool_calls[3]"},
+        {"claim": "errors share signature with checkout, ruling out orders-specific bug", "source": "tool_calls[2]"}
+      ],
+      "recommended_action": "Do not roll back orders.",
+      "runbook_link": null
+    },
+    {
+      "root_cause_service": "upstream_provider",
+      "root_cause_datetime": null,
+      "confidence": 0.04,
+      "reasoning": "An external provider could in theory fail simultaneously, but EAI_AGAIN is a DNS-plane error, not an HTTP/network error.",
+      "evidence": [
+        {"claim": "Errors are EAI_AGAIN (DNS), not 502/504/timeouts", "source": "tool_calls[1]"}
+      ],
+      "recommended_action": "Inspect provider status only if DNS rollback does not resolve.",
+      "runbook_link": null
+    }
+  ],
+  "escalation": {"should_escalate": true, "reason": "Multi-service blast radius; recommend page platform on-call in parallel with rollback."}
+}

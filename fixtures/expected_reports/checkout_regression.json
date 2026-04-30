@@ -1,0 +1,79 @@
+{
+  "report_id": "0193f4a4-2b87-7a31-9c1f-1d6a93dca8c1",
+  "tenant_id": "demo",
+  "alert": {
+    "alert_id": "01J6Z3PG2K7H8N0V5W2RQXTC4M",
+    "tenant_id": "demo",
+    "fired_at": "2026-04-25T03:14:22.117Z",
+    "source": "pagerduty",
+    "severity": "page",
+    "service": "checkout",
+    "signal": {
+      "kind": "metric_threshold",
+      "metric": "http.server.duration",
+      "agg": "p99",
+      "value_ms": 2180,
+      "threshold_ms": 1500,
+      "window_minutes": 5
+    },
+    "title": "checkout p99 latency 2.18s (threshold 1.5s) for 5 min",
+    "labels": {"env": "prod", "region": "us-east-1", "team": "checkout", "deploy_window": "open"}
+  },
+  "generated_at": "2026-04-25T03:14:48.502Z",
+  "model": {"provider": "anthropic", "id": "claude-haiku-4-5-20251001"},
+  "investigation": {
+    "tool_calls": [
+      {"tool": "get_topology", "input": {"service": "checkout", "depth": 2}, "result_summary": "checkout → cart, payment, currency, shipping; payment is in ERROR", "result_size": 5, "duration_ms": 12},
+      {"tool": "get_recent_deploys", "input": {"service": "payment", "since": "2026-04-24T03:14:00Z"}, "result_summary": "1 PR merged 18 min before alert: 'bump stripe SDK 7→8'", "result_size": 1, "duration_ms": 184},
+      {"tool": "query_logs", "input": {"service": "payment", "regex": "TypeError|charges\\.create", "since": "2026-04-25T02:50:00Z", "limit": 25}, "result_summary": "21 ERROR lines: TypeError: charges.create() takes 0 positional arguments but 1 given", "result_size": 21, "duration_ms": 96},
+      {"tool": "query_metrics", "input": {"service": "payment", "metric": "http.server.error_rate", "agg": "rate", "since": "2026-04-25T02:50:00Z"}, "result_summary": "error rate 0% baseline, jumped to 87% at 02:56:11Z and stayed there", "result_size": 23, "duration_ms": 71},
+      {"tool": "get_runbook", "input": {"service": "payment"}, "result_summary": "runbooks/payment.md exists; rollback command documented", "result_size": 1, "duration_ms": 4}
+    ],
+    "tokens_in": 4812,
+    "tokens_out": 612,
+    "cost_usd": 0.018
+  },
+  "hypotheses": [
+    {
+      "root_cause_service": "payment",
+      "root_cause_datetime": "2026-04-25T02:56:11Z",
+      "confidence": 0.92,
+      "reasoning": "The payment service began returning errors at 02:56:11Z, 18 minutes before the checkout p99 alert. A PR merged at 02:55:42Z (commit abc1234) bumped the Stripe SDK from v7 to v8; the v8 client.charges.create signature changed. payment logs show 21 TypeError lines matching the new signature. checkout depends on payment for /checkout requests, so checkout latency reflects payment retries until they time out. Cart, currency, and shipping are healthy.",
+      "evidence": [
+        {"claim": "payment is the only ERROR-state node downstream of checkout", "source": "tool_calls[0]"},
+        {"claim": "A PR landed on payment 18 min before the alert: 'bump stripe SDK 7→8'", "source": "tool_calls[1]"},
+        {"claim": "payment is logging TypeError on charges.create at 21 occurrences in the window", "source": "tool_calls[2]"},
+        {"claim": "payment error rate jumped from 0% to 87% at 02:56:11Z and held", "source": "tool_calls[3]"}
+      ],
+      "recommended_action": "git revert abc1234 && deploy payment",
+      "runbook_link": "runbooks/payment.md"
+    },
+    {
+      "root_cause_service": "checkout",
+      "root_cause_datetime": "2026-04-25T02:56:11Z",
+      "confidence": 0.18,
+      "reasoning": "checkout is the alerting service and its own latency is the symptom. There is no recent deploy to checkout itself and its error rate is 0% — the elevated p99 is request queueing on synchronous payment calls, not a checkout-side regression.",
+      "evidence": [
+        {"claim": "No PRs merged on checkout in the last 24h", "source": "tool_calls[1]"},
+        {"claim": "checkout error rate is at baseline; only latency spiked", "source": "tool_calls[3]"}
+      ],
+      "recommended_action": "Do not roll back checkout — its code is fine. Fix payment first.",
+      "runbook_link": null
+    },
+    {
+      "root_cause_service": "stripe",
+      "root_cause_datetime": null,
+      "confidence": 0.05,
+      "reasoning": "An external Stripe outage could produce identical symptoms, but the TypeError signature is a client-side bug, not a network or 5xx pattern.",
+      "evidence": [
+        {"claim": "Errors are TypeError (client-side), not 502/504/timeout", "source": "tool_calls[2]"}
+      ],
+      "recommended_action": "Check status.stripe.com only if rollback does not resolve.",
+      "runbook_link": null
+    }
+  ],
+  "escalation": {
+    "should_escalate": false,
+    "reason": "High confidence on top hypothesis with a documented rollback path; safe to act."
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "alert_id": "01J6Z3PG2K7H8N0V5W2RQXTC4M",
+  "tenant_id": "demo",
+  "fired_at": "2026-04-25T03:14:22.117Z",
+  "source": "pagerduty",
+  "severity": "page",
+  "service": "checkout",
+  "signal": {
+    "kind": "metric_threshold",
+    "metric": "http.server.duration",
+    "agg": "p99",
+    "value_ms": 2180,
+    "threshold_ms": 1500,
+    "window_minutes": 5
+  },
+  "title": "checkout p99 latency 2.18s (threshold 1.5s) for 5 min",
+  "description": "PagerDuty alert: customer-facing checkout endpoint exceeded SLA. POST /checkout p99 latency has been above 1.5s threshold for the last 5 minutes. Currently observing 2.18s p99 across 12 pods.",
+  "labels": {
+    "env": "prod",
+    "region": "us-east-1",
+    "team": "checkout",
+    "deploy_window": "open"
+  },
+  "expected_focus_service": "checkout"
+}

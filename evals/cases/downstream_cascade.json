@@ -1,0 +1,7 @@
+{
+  "case_id": "downstream_cascade",
+  "family": "downstream_cascade",
+  "difficulty": "hard",
+  "alert_fixture": "fixtures/synthetic_alerts/downstream_cascade.json",
+  "expected_fixture": "fixtures/expected_reports/downstream_cascade.json"
+}

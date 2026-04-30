@@ -1,0 +1,7 @@
+{
+  "case_id": "noisy_neighbor",
+  "family": "noisy_neighbor",
+  "difficulty": "medium",
+  "alert_fixture": "fixtures/synthetic_alerts/noisy_neighbor.json",
+  "expected_fixture": "fixtures/expected_reports/noisy_neighbor.json"
+}

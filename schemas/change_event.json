@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-oncall.local/schemas/change_event.json",
+  "title": "ChangeEvent",
+  "description": "GitHub PR / commit / deploy. Patch capped at 2KB at the ingest layer.",
+  "type": "object",
+  "required": ["tenant_id", "event_id", "service", "kind", "timestamp", "actor"],
+  "additionalProperties": false,
+  "properties": {
+    "tenant_id": {"type": "string", "minLength": 1},
+    "event_id": {"type": "string", "minLength": 1, "description": "Stable upstream id (sha, PR number, deploy id)."},
+    "service": {"type": "string", "minLength": 1},
+    "kind": {"type": "string", "enum": ["pr_merged", "commit", "deploy", "config_change", "feature_flag"]},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "actor": {"type": "string", "description": "GitHub login or system identifier."},
+    "title": {"type": ["string", "null"]},
+    "url": {"type": ["string", "null"], "format": "uri"},
+    "sha": {"type": ["string", "null"]},
+    "patch_excerpt": {"type": ["string", "null"], "maxLength": 2048, "description": "≤ 2KB diff snippet."},
+    "files_changed": {"type": "array", "items": {"type": "string"}}
+  }
+}

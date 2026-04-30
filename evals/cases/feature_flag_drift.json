@@ -1,0 +1,7 @@
+{
+  "case_id": "feature_flag_drift",
+  "family": "config_drift",
+  "difficulty": "easy",
+  "alert_fixture": "fixtures/synthetic_alerts/feature_flag_drift.json",
+  "expected_fixture": "fixtures/expected_reports/feature_flag_drift.json"
+}

@@ -1,0 +1,67 @@
+{
+  "report_id": "0193f4c2-2d55-7c33-be91-3f8c15fe02e3",
+  "tenant_id": "demo",
+  "alert": {
+    "alert_id": "01J7B2RG4L9HAN2V7W4RQXTC6P",
+    "tenant_id": "demo",
+    "fired_at": "2026-04-27T09:18:50.000Z",
+    "source": "datadog",
+    "severity": "warn",
+    "service": "search",
+    "signal": {"kind": "metric_threshold", "metric": "http.server.error_rate", "agg": "rate", "value_ms": 0, "threshold_ms": 0, "window_minutes": 5},
+    "title": "search error rate 12% (threshold 2%) for 5 min",
+    "labels": {"env": "prod", "region": "eu-west-1", "team": "search"}
+  },
+  "generated_at": "2026-04-27T09:19:14.220Z",
+  "model": {"provider": "mock", "id": "mock-deterministic"},
+  "investigation": {
+    "tool_calls": [
+      {"tool": "get_recent_deploys", "input": {"service": "search", "since": "2026-04-26T09:00:00Z"}, "result_summary": "no code deploys; 1 feature-flag change at 09:13:11Z: search.semantic-rerank 1% -> 50%", "result_size": 1, "duration_ms": 92},
+      {"tool": "query_logs", "input": {"service": "search", "regex": "rerank|semantic|null pointer|TypeError", "since": "2026-04-27T09:00:00Z", "limit": 25}, "result_summary": "23 ERROR lines: NullPointerException in SemanticReranker.run when documents=[]", "result_size": 23, "duration_ms": 88},
+      {"tool": "query_metrics", "input": {"service": "search", "metric": "http.server.error_rate", "agg": "rate", "since": "2026-04-27T09:00:00Z"}, "result_summary": "error rate jumped from 0.3% to 12% at 09:13:41Z", "result_size": 30, "duration_ms": 55},
+      {"tool": "get_topology", "input": {"service": "search", "depth": 1}, "result_summary": "search downstream dependencies all OK", "result_size": 4, "duration_ms": 9}
+    ],
+    "tokens_in": 4302,
+    "tokens_out": 502,
+    "cost_usd": 0.012
+  },
+  "hypotheses": [
+    {
+      "root_cause_service": "search",
+      "root_cause_datetime": "2026-04-27T09:13:41Z",
+      "confidence": 0.91,
+      "reasoning": "Feature flag `search.semantic-rerank` flipped from 1% to 50% rollout 30 seconds before the error rate climbed. Logs show NullPointerException in SemanticReranker.run when the input document list is empty — the new code path does not handle the no-results case. Roll the flag back to restore service; ship a null-safe fix afterward.",
+      "evidence": [
+        {"claim": "Feature flag search.semantic-rerank flipped 1% -> 50% at 09:13:11Z, 30s before the error climb", "source": "tool_calls[0]"},
+        {"claim": "23 NullPointerException lines in SemanticReranker.run with empty documents list", "source": "tool_calls[1]"},
+        {"claim": "Error rate climbed at 09:13:41Z and is sustained at 12%", "source": "tool_calls[2]"},
+        {"claim": "All search downstream dependencies are healthy", "source": "tool_calls[3]"}
+      ],
+      "recommended_action": "Disable feature flag search.semantic-rerank (revert to 1%) immediately; ship null-empty-document patch before re-enabling.",
+      "runbook_link": null
+    },
+    {
+      "root_cause_service": "search-index",
+      "root_cause_datetime": null,
+      "confidence": 0.05,
+      "reasoning": "An empty-result spike could in theory come from a degraded index, but downstream metrics for search-index are clean.",
+      "evidence": [
+        {"claim": "search-index latency and error rate are at baseline", "source": "tool_calls[3]"}
+      ],
+      "recommended_action": "If flag rollback does not resolve, inspect search-index freshness.",
+      "runbook_link": null
+    },
+    {
+      "root_cause_service": "client_traffic_shift",
+      "root_cause_datetime": null,
+      "confidence": 0.03,
+      "reasoning": "A surge of zero-result queries from a misbehaving client could trigger the same path, but call-volume is flat across the alert window.",
+      "evidence": [
+        {"claim": "search call volume is flat in the alert window", "source": "tool_calls[2]"}
+      ],
+      "recommended_action": "Inspect top callers only if rollback does not resolve.",
+      "runbook_link": null
+    }
+  ],
+  "escalation": {"should_escalate": false, "reason": "Reversible flag flip; rollback path is documented and immediate."}
+}

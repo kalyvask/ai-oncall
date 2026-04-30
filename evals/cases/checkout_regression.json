@@ -1,0 +1,7 @@
+{
+  "case_id": "checkout_regression",
+  "family": "deploy_regression",
+  "difficulty": "easy",
+  "alert_fixture": "fixtures/synthetic_alerts/checkout_regression.json",
+  "expected_fixture": "fixtures/expected_reports/checkout_regression.json"
+}

@@ -1,0 +1,20 @@
+{
+  "alert_id": "01J7E5UK7PCKDP5VAW7RQXTC9S",
+  "tenant_id": "demo",
+  "fired_at": "2026-04-28T17:30:02.000Z",
+  "source": "pagerduty",
+  "severity": "page",
+  "service": "orders",
+  "signal": {
+    "kind": "metric_threshold",
+    "metric": "http.server.error_rate",
+    "agg": "rate",
+    "value_ms": 0,
+    "threshold_ms": 0,
+    "window_minutes": 5
+  },
+  "title": "orders 5xx 18% — DNS resolution failures across services",
+  "description": "Multiple services report 5xx simultaneously. orders, checkout, search all degraded at once.",
+  "labels": {"env": "prod", "region": "us-east-1", "team": "platform"},
+  "expected_focus_service": "internal-dns"
+}

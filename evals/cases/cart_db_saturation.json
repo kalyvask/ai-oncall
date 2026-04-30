@@ -1,0 +1,7 @@
+{
+  "case_id": "cart_db_saturation",
+  "family": "dependency_saturation",
+  "difficulty": "medium",
+  "alert_fixture": "fixtures/synthetic_alerts/cart_db_saturation.json",
+  "expected_fixture": "fixtures/expected_reports/cart_db_saturation.json"
+}

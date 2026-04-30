@@ -1,0 +1,74 @@
+{
+  "report_id": "0193f4b1-1c44-7b22-ad80-2e7b04ed91d2",
+  "tenant_id": "demo",
+  "alert": {
+    "alert_id": "01J7A1QF3K8H9N1V6W3RQXTC5N",
+    "tenant_id": "demo",
+    "fired_at": "2026-04-26T14:02:11.000Z",
+    "source": "grafana",
+    "severity": "page",
+    "service": "cart",
+    "signal": {
+      "kind": "metric_threshold",
+      "metric": "http.server.duration",
+      "agg": "p99",
+      "value_ms": 3400,
+      "threshold_ms": 1500,
+      "window_minutes": 5
+    },
+    "title": "cart p99 latency 3.4s — cart-db connection saturation suspected",
+    "labels": {"env": "prod", "region": "us-east-1", "team": "checkout"}
+  },
+  "generated_at": "2026-04-26T14:02:39.117Z",
+  "model": {"provider": "mock", "id": "mock-deterministic"},
+  "investigation": {
+    "tool_calls": [
+      {"tool": "get_topology", "input": {"service": "cart", "depth": 2}, "result_summary": "cart -> cart-db (status WARN); cart-db connection_utilization 100%", "result_size": 2, "duration_ms": 11},
+      {"tool": "get_recent_deploys", "input": {"service": "cart", "since": "2026-04-25T14:00:00Z"}, "result_summary": "no deploys in last 24h to cart or cart-db", "result_size": 0, "duration_ms": 122},
+      {"tool": "query_metrics", "input": {"service": "cart-db", "metric": "db.pool.utilization", "agg": "p99", "since": "2026-04-26T13:30:00Z"}, "result_summary": "pool utilization climbed from 62% to 100% over 30 min, plateaued", "result_size": 30, "duration_ms": 64},
+      {"tool": "query_logs", "input": {"service": "cart-db", "regex": "too many connections|pool exhausted", "since": "2026-04-26T13:50:00Z", "limit": 25}, "result_summary": "14 FATAL lines: 'too many connections' on cart-db replica 2", "result_size": 14, "duration_ms": 71},
+      {"tool": "get_runbook", "input": {"service": "cart"}, "result_summary": "runbook documents pool resize + restart of largest cart pod", "result_size": 1, "duration_ms": 4}
+    ],
+    "tokens_in": 4621,
+    "tokens_out": 538,
+    "cost_usd": 0.014
+  },
+  "hypotheses": [
+    {
+      "root_cause_service": "cart-db",
+      "root_cause_datetime": "2026-04-26T13:32:00Z",
+      "confidence": 0.86,
+      "reasoning": "cart-db connection pool saturated at 100% with 14 FATAL 'too many connections' log lines. cart latency tracks the saturation curve. No recent deploys to cart or cart-db, so this is capacity-driven rather than a regression. Most likely a long-running query or leaked connection on a cart-db client.",
+      "evidence": [
+        {"claim": "cart-db pool utilization plateaued at 100% from 13:32 onwards", "source": "tool_calls[2]"},
+        {"claim": "14 FATAL 'too many connections' lines on cart-db replica 2", "source": "tool_calls[3]"},
+        {"claim": "No deploys to cart or cart-db in the last 24h", "source": "tool_calls[1]"}
+      ],
+      "recommended_action": "Bump cart-db pool size and restart the largest cart pod to free connections; see runbooks/cart.md",
+      "runbook_link": "runbooks/cart.md"
+    },
+    {
+      "root_cause_service": "cart",
+      "root_cause_datetime": null,
+      "confidence": 0.10,
+      "reasoning": "cart itself is the alerting service, but its code is unchanged and its CPU/memory are at baseline. Latency is a downstream symptom.",
+      "evidence": [
+        {"claim": "cart CPU and memory at baseline; only latency spiked", "source": "tool_calls[2]"}
+      ],
+      "recommended_action": "Do not roll back cart — fix the cart-db pool first.",
+      "runbook_link": null
+    },
+    {
+      "root_cause_service": "noisy_neighbor",
+      "root_cause_datetime": null,
+      "confidence": 0.04,
+      "reasoning": "An unrelated workload could be hammering cart-db, but no evidence of cross-service writes appears in the logs.",
+      "evidence": [
+        {"claim": "logs show only cart-originating queries on cart-db replica 2", "source": "tool_calls[3]"}
+      ],
+      "recommended_action": "Check cart-db query top-N if pool fix does not resolve.",
+      "runbook_link": null
+    }
+  ],
+  "escalation": {"should_escalate": false, "reason": "Documented runbook applies; capacity action is reversible."}
+}

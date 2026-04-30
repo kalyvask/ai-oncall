@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-oncall.local/schemas/alert.json",
+  "title": "Alert",
+  "description": "Normalized alert envelope. Stage 1 (RECEIVE) emits this.",
+  "type": "object",
+  "required": ["alert_id", "tenant_id", "fired_at", "source", "severity", "service", "signal", "title"],
+  "additionalProperties": true,
+  "properties": {
+    "alert_id": {"type": "string", "minLength": 1},
+    "tenant_id": {"type": "string", "minLength": 1},
+    "fired_at": {"type": "string", "format": "date-time"},
+    "source": {"type": "string", "enum": ["pagerduty", "opsgenie", "grafana", "datadog", "manual", "slack"]},
+    "severity": {"type": "string", "enum": ["page", "warn", "info"]},
+    "service": {"type": "string", "minLength": 1},
+    "signal": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": {"type": "string", "enum": ["metric_threshold", "log_pattern", "trace_anomaly", "synthetic_probe", "manual"]},
+        "metric": {"type": "string"},
+        "agg": {"type": "string", "enum": ["p50", "p99", "p95", "sum", "rate", "avg"]},
+        "value_ms": {"type": "number"},
+        "threshold_ms": {"type": "number"},
+        "window_minutes": {"type": "integer", "minimum": 1}
+      }
+    },
+    "title": {"type": "string"},
+    "description": {"type": "string"},
+    "labels": {"type": "object", "additionalProperties": {"type": "string"}},
+    "expected_focus_service": {"type": "string"}
+  }
+}

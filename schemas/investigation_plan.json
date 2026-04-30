@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-oncall.local/schemas/investigation_plan.json",
+  "title": "InvestigationPlan",
+  "description": "Output of stage 3 (PLAN). 3-5 ranked hypotheses, each with the queries the agent intends to run.",
+  "type": "object",
+  "required": ["tenant_id", "alert_id", "hypotheses"],
+  "additionalProperties": false,
+  "properties": {
+    "tenant_id": {"type": "string", "minLength": 1},
+    "alert_id": {"type": "string", "minLength": 1},
+    "hypotheses": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "required": ["statement", "confidence", "queries"],
+        "additionalProperties": false,
+        "properties": {
+          "statement": {"type": "string", "minLength": 1},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+          "queries": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["tool", "input"],
+              "additionalProperties": false,
+              "properties": {
+                "tool": {"type": "string", "enum": ["query_metrics", "query_logs", "get_recent_deploys", "get_runbook", "get_topology", "get_past_incidents"]},
+                "input": {"type": "object"},
+                "rationale": {"type": "string"}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

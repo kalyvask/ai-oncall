@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-oncall.local/schemas/rca_report.json",
+  "title": "RcaReport",
+  "description": "Output of the SYNTHESIZE stage. Posted to Slack, served via API, exported to HTML.",
+  "type": "object",
+  "required": ["report_id", "tenant_id", "alert", "generated_at", "model", "hypotheses"],
+  "additionalProperties": false,
+  "properties": {
+    "report_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Stable identifier for this report. UI deep-links use it."
+    },
+    "tenant_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Multi-tenant isolation key. Required on every record."
+    },
+    "alert": {
+      "$ref": "alert.json"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "model": {
+      "type": "object",
+      "required": ["provider", "id"],
+      "properties": {
+        "provider": {"type": "string", "enum": ["anthropic", "openai", "gemini", "mock"]},
+        "id": {"type": "string", "description": "Concrete model identifier, e.g. claude-haiku-4-5-20251001"}
+      }
+    },
+    "investigation": {
+      "type": "object",
+      "description": "What the agent did, summarized. Renders as the reasoning trace in the UI.",
+      "properties": {
+        "tool_calls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["tool", "input", "result_summary", "duration_ms"],
+            "properties": {
+              "tool": {"type": "string", "enum": ["query_metrics", "query_logs", "get_recent_deploys", "get_runbook", "get_topology", "get_past_incidents"]},
+              "input": {"type": "object"},
+              "result_summary": {"type": "string"},
+              "result_size": {"type": "integer", "minimum": 0},
+              "duration_ms": {"type": "number", "minimum": 0}
+            }
+          }
+        },
+        "tokens_in": {"type": "integer", "minimum": 0},
+        "tokens_out": {"type": "integer", "minimum": 0},
+        "cost_usd": {"type": "number", "minimum": 0}
+      }
+    },
+    "hypotheses": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5,
+      "description": "Ranked best-first. The top one is the headline; the rest render as alternatives.",
+      "items": {
+        "type": "object",
+        "required": ["root_cause_service", "confidence", "reasoning", "evidence", "recommended_action"],
+        "additionalProperties": false,
+        "properties": {
+          "root_cause_service": {
+            "type": "string",
+            "description": "Service that triggered the cascade, not the alerting service unless they coincide."
+          },
+          "root_cause_datetime": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Earliest moment the fault is observable. Null if the agent cannot determine it."
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "reasoning": {
+            "type": "string",
+            "description": "Plain-text causal narrative; one paragraph."
+          },
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 8,
+            "description": "Each bullet pins to a specific tool call or topology fact. The UI renders these as clickable.",
+            "items": {
+              "type": "object",
+              "required": ["claim", "source"],
+              "properties": {
+                "claim": {"type": "string"},
+                "source": {
+                  "type": "string",
+                  "description": "Reference to a tool call (e.g. 'tool_calls[2]'), a topology edge, or a change_event id."
+                }
+              }
+            }
+          },
+          "recommended_action": {
+            "type": "string",
+            "description": "One concrete command. Examples: 'git revert abc1234', 'kubectl rollout undo deploy/payment', 'disable feature flag checkout.async-batching'."
+          },
+          "runbook_link": {
+            "type": ["string", "null"],
+            "description": "Path under runbooks/ if a matching one exists."
+          }
+        }
+      }
+    },
+    "escalation": {
+      "type": "object",
+      "description": "When the agent does not trust its own answer.",
+      "properties": {
+        "should_escalate": {"type": "boolean"},
+        "reason": {"type": "string"}
+      }
+    }
+  }
+}

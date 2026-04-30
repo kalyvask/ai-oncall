@@ -1,0 +1,20 @@
+{
+  "alert_id": "01J7A1QF3K8H9N1V6W3RQXTC5N",
+  "tenant_id": "demo",
+  "fired_at": "2026-04-26T14:02:11.000Z",
+  "source": "grafana",
+  "severity": "page",
+  "service": "cart",
+  "signal": {
+    "kind": "metric_threshold",
+    "metric": "http.server.duration",
+    "agg": "p99",
+    "value_ms": 3400,
+    "threshold_ms": 1500,
+    "window_minutes": 5
+  },
+  "title": "cart p99 latency 3.4s — cart-db connection saturation suspected",
+  "description": "cart latency spiked across all replicas. cart-db connection pool reports 100% utilization for 8 minutes. No recent deploys to cart or cart-db.",
+  "labels": {"env": "prod", "region": "us-east-1", "team": "checkout"},
+  "expected_focus_service": "cart-db"
+}

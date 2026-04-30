@@ -1,0 +1,66 @@
+{
+  "report_id": "0193f4d3-3e66-7d44-cf02-40ad26019404",
+  "tenant_id": "demo",
+  "alert": {
+    "alert_id": "01J7C3SH5MAIBN3V8W5RQXTC7Q",
+    "tenant_id": "demo",
+    "fired_at": "2026-04-28T22:46:30.000Z",
+    "source": "pagerduty",
+    "severity": "warn",
+    "service": "payment",
+    "signal": {"kind": "metric_threshold", "metric": "process.runtime.jvm.memory.usage", "agg": "avg", "value_ms": 0, "threshold_ms": 0, "window_minutes": 30},
+    "title": "payment heap usage drift — OOM risk in <2h",
+    "labels": {"env": "prod", "region": "us-east-1", "team": "payments"}
+  },
+  "generated_at": "2026-04-28T22:46:55.301Z",
+  "model": {"provider": "mock", "id": "mock-deterministic"},
+  "investigation": {
+    "tool_calls": [
+      {"tool": "query_metrics", "input": {"service": "payment", "metric": "jvm.memory.usage", "agg": "avg", "since": "2026-04-28T16:00:00Z"}, "result_summary": "linear climb 1.1GB -> 1.6GB over 6h, slope 80MB/h, no plateau", "result_size": 60, "duration_ms": 64},
+      {"tool": "get_recent_deploys", "input": {"service": "payment", "since": "2026-04-21T22:00:00Z"}, "result_summary": "1 deploy 7 days ago: 'enable async retry queue'", "result_size": 1, "duration_ms": 110},
+      {"tool": "query_logs", "input": {"service": "payment", "regex": "GC|OutOfMemory|RetryQueue", "since": "2026-04-28T20:00:00Z", "limit": 25}, "result_summary": "no OOM yet; 12 INFO lines from RetryQueue showing queue size 240k and growing", "result_size": 12, "duration_ms": 58},
+      {"tool": "get_past_incidents", "input": {"service": "payment", "k": 3}, "result_summary": "1 prior incident matched: 'retry queue grew unbounded after stripe SDK upgrade' (2026-01)", "result_size": 1, "duration_ms": 22}
+    ],
+    "tokens_in": 4910,
+    "tokens_out": 588,
+    "cost_usd": 0.016
+  },
+  "hypotheses": [
+    {
+      "root_cause_service": "payment",
+      "root_cause_datetime": "2026-04-28T16:00:00Z",
+      "confidence": 0.71,
+      "reasoning": "payment heap climbs linearly at 80MB/h with no GC reclaim. The async retry queue (introduced 7 days ago) has grown to 240k entries and is still climbing — entries are not being drained. A near-identical incident in 2026-01 had the same shape and was a queue dequeue regression. OOM is projected within ~90 minutes.",
+      "evidence": [
+        {"claim": "Heap is climbing linearly with no plateau", "source": "tool_calls[0]"},
+        {"claim": "RetryQueue size has reached 240k entries and is still climbing", "source": "tool_calls[2]"},
+        {"claim": "Past incident with the same pattern: retry queue dequeue regression", "source": "tool_calls[3]"}
+      ],
+      "recommended_action": "Roll the largest payment pod first to relieve heap pressure; investigate RetryQueue dequeue path. Page payment lead if heap continues to climb after restart.",
+      "runbook_link": "runbooks/payment.md"
+    },
+    {
+      "root_cause_service": "payment",
+      "root_cause_datetime": null,
+      "confidence": 0.18,
+      "reasoning": "An organic traffic increase could explain heap growth, but call volume is flat across the 6h window.",
+      "evidence": [
+        {"claim": "payment request rate is flat across the climb", "source": "tool_calls[0]"}
+      ],
+      "recommended_action": "Compare call rate week-over-week only if rolling pods does not stabilize heap.",
+      "runbook_link": null
+    },
+    {
+      "root_cause_service": "stripe",
+      "root_cause_datetime": null,
+      "confidence": 0.06,
+      "reasoning": "External Stripe slowness could cause retry queue growth, but Stripe latency in the time window is at baseline.",
+      "evidence": [
+        {"claim": "Stripe call latency is unchanged in the last 6h", "source": "tool_calls[0]"}
+      ],
+      "recommended_action": "Check status.stripe.com only after restart.",
+      "runbook_link": null
+    }
+  ],
+  "escalation": {"should_escalate": true, "reason": "Slow leaks routinely fool single-shot diagnosis; flagging for human review and recommending preemptive pod roll."}
+}

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-oncall.local/schemas/telemetry_record.json",
+  "title": "TelemetryRecord",
+  "description": "Normalized OTLP record. One row per span / metric point / log line. tenant_id is mandatory at the storage layer.",
+  "type": "object",
+  "required": ["tenant_id", "kind", "service", "timestamp"],
+  "additionalProperties": false,
+  "properties": {
+    "tenant_id": {"type": "string", "minLength": 1},
+    "kind": {"type": "string", "enum": ["trace", "metric", "log"]},
+    "service": {"type": "string", "minLength": 1},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "trace_id": {"type": ["string", "null"]},
+    "span_id": {"type": ["string", "null"]},
+    "parent_span_id": {"type": ["string", "null"]},
+    "name": {"type": ["string", "null"], "description": "span name or metric name"},
+    "duration_ms": {"type": ["number", "null"], "minimum": 0},
+    "status": {"type": ["string", "null"], "enum": [null, "ok", "error", "unset"]},
+    "metric_value": {"type": ["number", "null"]},
+    "metric_unit": {"type": ["string", "null"]},
+    "severity": {"type": ["string", "null"], "enum": [null, "trace", "debug", "info", "warn", "error", "fatal"]},
+    "body": {"type": ["string", "null"], "description": "log body or span event message"},
+    "attributes": {"type": "object", "additionalProperties": true}
+  }
+}

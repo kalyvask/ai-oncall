@@ -1,0 +1,7 @@
+{
+  "case_id": "payment_slow_leak",
+  "family": "slow_leak",
+  "difficulty": "hard",
+  "alert_fixture": "fixtures/synthetic_alerts/payment_slow_leak.json",
+  "expected_fixture": "fixtures/expected_reports/payment_slow_leak.json"
+}

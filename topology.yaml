@@ -1,0 +1,21 @@
+# Static topology fallback. The live builder overlays observed spans on top of
+# this; the file is the source of truth for the cold start moment.
+nodes:
+  - {service: checkout, status: unknown}
+  - {service: cart, status: unknown}
+  - {service: payment, status: unknown}
+  - {service: shipping, status: unknown}
+  - {service: currency, status: unknown}
+  - {service: search, status: unknown}
+  - {service: orders, status: unknown}
+  - {service: cart-db, status: unknown}
+  - {service: internal-dns, status: unknown}
+edges:
+  - {from: checkout, to: cart}
+  - {from: checkout, to: payment}
+  - {from: checkout, to: shipping}
+  - {from: checkout, to: currency}
+  - {from: cart, to: cart-db}
+  - {from: orders, to: payment}
+  - {from: orders, to: shipping}
+  - {from: search, to: internal-dns}

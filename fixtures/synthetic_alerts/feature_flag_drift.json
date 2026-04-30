@@ -1,0 +1,20 @@
+{
+  "alert_id": "01J7B2RG4L9HAN2V7W4RQXTC6P",
+  "tenant_id": "demo",
+  "fired_at": "2026-04-27T09:18:50.000Z",
+  "source": "datadog",
+  "severity": "warn",
+  "service": "search",
+  "signal": {
+    "kind": "metric_threshold",
+    "metric": "http.server.error_rate",
+    "agg": "rate",
+    "value_ms": 0,
+    "threshold_ms": 0,
+    "window_minutes": 5
+  },
+  "title": "search error rate 12% (threshold 2%) for 5 min",
+  "description": "search 5xx rate jumped from 0.3% to 12% at 09:13:41Z. Coincides with a feature-flag flip on `search.semantic-rerank` from 1% to 50% rollout.",
+  "labels": {"env": "prod", "region": "eu-west-1", "team": "search"},
+  "expected_focus_service": "search"
+}

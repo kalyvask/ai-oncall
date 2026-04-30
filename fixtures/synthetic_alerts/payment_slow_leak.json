@@ -1,0 +1,20 @@
+{
+  "alert_id": "01J7C3SH5MAIBN3V8W5RQXTC7Q",
+  "tenant_id": "demo",
+  "fired_at": "2026-04-28T22:46:30.000Z",
+  "source": "pagerduty",
+  "severity": "warn",
+  "service": "payment",
+  "signal": {
+    "kind": "metric_threshold",
+    "metric": "process.runtime.jvm.memory.usage",
+    "agg": "avg",
+    "value_ms": 0,
+    "threshold_ms": 0,
+    "window_minutes": 30
+  },
+  "title": "payment heap usage drift — OOM risk in <2h",
+  "description": "payment heap is climbing 80MB/hour over 6 hours. No spike, no deploy. Trajectory hits the 90% limit in 90 minutes if unbounded.",
+  "labels": {"env": "prod", "region": "us-east-1", "team": "payments"},
+  "expected_focus_service": "payment"
+}

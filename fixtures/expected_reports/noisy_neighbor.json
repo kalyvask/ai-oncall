@@ -1,0 +1,67 @@
+{
+  "report_id": "0193f4e4-4f77-7e55-d013-51be37120505",
+  "tenant_id": "demo",
+  "alert": {
+    "alert_id": "01J7D4TJ6NBJCO4V9W6RQXTC8R",
+    "tenant_id": "demo",
+    "fired_at": "2026-04-28T11:11:11.000Z",
+    "source": "grafana",
+    "severity": "warn",
+    "service": "shipping",
+    "signal": {"kind": "metric_threshold", "metric": "http.server.duration", "agg": "p99", "value_ms": 1900, "threshold_ms": 1200, "window_minutes": 5},
+    "title": "shipping p99 latency 1.9s — coincides with batch ETL kickoff",
+    "labels": {"env": "prod", "region": "us-east-1", "team": "logistics"}
+  },
+  "generated_at": "2026-04-28T11:11:38.450Z",
+  "model": {"provider": "mock", "id": "mock-deterministic"},
+  "investigation": {
+    "tool_calls": [
+      {"tool": "get_topology", "input": {"service": "shipping", "depth": 2}, "result_summary": "shipping deps clean; analytics-etl scheduled on same node pool", "result_size": 6, "duration_ms": 13},
+      {"tool": "get_recent_deploys", "input": {"service": "shipping", "since": "2026-04-27T11:00:00Z"}, "result_summary": "no deploys to shipping or analytics-etl in last 24h", "result_size": 0, "duration_ms": 88},
+      {"tool": "query_metrics", "input": {"service": "node-pool-a", "metric": "node.cpu.utilization", "agg": "avg", "since": "2026-04-28T11:00:00Z"}, "result_summary": "node CPU jumped from 35% to 92% at 11:08Z when analytics-etl pod started", "result_size": 12, "duration_ms": 58},
+      {"tool": "query_metrics", "input": {"service": "node-pool-a", "metric": "network.bytes_per_sec", "agg": "sum", "since": "2026-04-28T11:00:00Z"}, "result_summary": "egress climbed 8x at 11:08Z, sustained", "result_size": 12, "duration_ms": 51}
+    ],
+    "tokens_in": 4108,
+    "tokens_out": 471,
+    "cost_usd": 0.011
+  },
+  "hypotheses": [
+    {
+      "root_cause_service": "analytics-etl",
+      "root_cause_datetime": "2026-04-28T11:08:00Z",
+      "confidence": 0.78,
+      "reasoning": "shipping latency degradation tracks the analytics-etl pod start at 11:08Z. Both run on node-pool-a, whose CPU jumped from 35% to 92% and network egress climbed 8x at that exact moment. shipping itself is unchanged; the contention is for shared node resources. This is a classic noisy-neighbor pattern.",
+      "evidence": [
+        {"claim": "shipping and analytics-etl share node-pool-a", "source": "tool_calls[0]"},
+        {"claim": "node-pool-a CPU rose from 35% to 92% at 11:08Z when ETL started", "source": "tool_calls[2]"},
+        {"claim": "Network egress on node-pool-a climbed 8x at 11:08Z", "source": "tool_calls[3]"}
+      ],
+      "recommended_action": "Move analytics-etl to its dedicated node pool (taint shipping nodes); reschedule the ETL outside shipping's peak window as a follow-up.",
+      "runbook_link": null
+    },
+    {
+      "root_cause_service": "shipping",
+      "root_cause_datetime": null,
+      "confidence": 0.10,
+      "reasoning": "shipping has no recent deploy and its CPU/memory utilization at the pod level is at baseline. Latency is environmental.",
+      "evidence": [
+        {"claim": "shipping pods are at baseline CPU/memory", "source": "tool_calls[2]"},
+        {"claim": "no deploys to shipping in 24h", "source": "tool_calls[1]"}
+      ],
+      "recommended_action": "Do not roll back shipping; the regression is environmental.",
+      "runbook_link": null
+    },
+    {
+      "root_cause_service": "shipping_provider_api",
+      "root_cause_datetime": null,
+      "confidence": 0.05,
+      "reasoning": "An external provider slowdown could increase latency, but provider-side metrics are at baseline.",
+      "evidence": [
+        {"claim": "external shipping provider latency unchanged in window", "source": "tool_calls[0]"}
+      ],
+      "recommended_action": "Inspect provider only if pool change does not resolve.",
+      "runbook_link": null
+    }
+  ],
+  "escalation": {"should_escalate": false, "reason": "Cause is environmental and reversible via pool-affinity change; no need to wake another engineer."}
+}

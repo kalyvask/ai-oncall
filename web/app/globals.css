@@ -1,0 +1,108 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*  Design contract — see UI_DESIGN.md.
+    References merged: ryanthedev/design-for-ai + pbakaus/impeccable.
+
+    Color strategy: RESTRAINED (impeccable §Color). Tinted neutrals + one
+    accent ≤10% surface coverage. Hue is warm amber (~70°) — a counter-reflex
+    to the observability category default of cyan/teal-on-dark.
+
+    Theme: dark default, light auto-derived. The scene: SRE at 2am, dim room,
+    27" or phone. Dark forces calm; amber says "attention, not panic." */
+
+:root {
+  /* Tinted neutrals — chroma 0.008 toward hue 70 (warm). Never pure gray. */
+  --ink-0: oklch(98% 0.005 70);
+  --ink-1: oklch(94% 0.008 70);
+  --ink-2: oklch(82% 0.010 70);
+  --ink-3: oklch(64% 0.012 70);
+  --ink-4: oklch(46% 0.014 70);
+  --ink-5: oklch(30% 0.014 70);
+  --ink-6: oklch(22% 0.012 70);
+  --ink-7: oklch(16% 0.010 70);
+  --ink-8: oklch(12% 0.010 70);
+  --ink-9: oklch(8%  0.008 70);
+
+  /* Single accent. Warm amber. Reduce chroma at extreme lightness. */
+  --acc:    oklch(78% 0.13 70);
+  --acc-hi: oklch(86% 0.10 70);
+  --acc-lo: oklch(64% 0.13 70);
+  --acc-bg: oklch(78% 0.13 70 / 14%);
+
+  /* Status — separated in HUE so they survive color-blindness, not just lightness. */
+  --pos:  oklch(72% 0.14 150);   /* clear of amber by 80°, of red by 130° */
+  --neg:  oklch(64% 0.20 22);    /* high-chroma red, holds against dark bg */
+  --warn: oklch(80% 0.16 50);    /* warmer than acc; reserved for "alert me" */
+
+  /* Type scale — fixed rem (impeccable: app UI uses fixed scales, not fluid).
+     Modular scale 1.25, 5 visible steps + 1 hero. */
+  --t-xs:  0.75rem;     /* 12px — captions, eyebrows */
+  --t-sm:  0.875rem;    /* 14px — secondary UI */
+  --t-md:  1rem;        /* 16px — body */
+  --t-lg:  1.25rem;     /* 20px — subheadings */
+  --t-xl:  1.563rem;    /* 25px — section heads */
+  --t-2xl: 1.953rem;    /* 31px — page heads */
+  --t-3xl: 3.052rem;    /* 49px — hero, used once per page max */
+
+  /* Spacing — 4pt grid. Impeccable: VARY spacing for rhythm. Don't apply
+     the same value everywhere. These are tokens, not templates. */
+  --s-1: 0.25rem;  --s-2: 0.5rem;  --s-3: 0.75rem;
+  --s-4: 1rem;     --s-5: 1.5rem;  --s-6: 2rem;
+  --s-7: 3rem;     --s-8: 4rem;    --s-9: 6rem;
+
+  /* Motion — exponential ease-out. No bounce, no elastic. */
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-expo:  cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-quart:  cubic-bezier(0.5, 0, 0.75, 0);
+  --d-1: 120ms;  /* press / hover lightness */
+  --d-2: 220ms;  /* state change */
+  --d-3: 360ms;  /* layout change */
+}
+
+html { color-scheme: dark light; }
+
+body {
+  background: var(--ink-9);
+  color: var(--ink-1);
+  /* Tabular numerics globally — every number could change in place. */
+  font-feature-settings: "tnum", "ss01";
+  font-kerning: normal;
+  /* Line-height 1.55 = base 24px on 16px body. Spacing tokens align. */
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+@media (prefers-color-scheme: light) {
+  body { background: var(--ink-0); color: var(--ink-9); }
+}
+
+/* Headings: tight leading, balance line breaks. */
+h1, h2, h3 { line-height: 1.05; text-wrap: balance; letter-spacing: -0.01em; }
+p, li      { text-wrap: pretty; }
+
+/* Visible focus ring on every interactive element. WCAG. */
+:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* Reduced motion — vestibular safety. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Utility: ALL-CAPS eyebrow with proper tracking (typography ref §ALL-CAPS). */
+.eyebrow {
+  font-size: var(--t-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  color: var(--ink-3);
+  font-weight: 500;
+}
