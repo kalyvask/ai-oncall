@@ -1,8 +1,17 @@
 # ai-oncall
 
-Diagnoses production incidents using an LLM. When an alert fires, posts a
-ranked, evidence-backed RCA to Slack within ~30 seconds. Single Python
-process plus a Next.js UI.
+**ai-oncall** is an LLM agent that diagnoses production incidents.
+
+When the alert fires at 3am, it pulls the last 30 minutes of telemetry, the
+last 24 hours of deploys, the live service topology, and any matching
+runbook; runs a tool-using investigation loop (max 8 calls, 6 deterministic
+tools); and posts a ranked, evidence-backed RCA to Slack inside 30 seconds.
+Each hypothesis pins to specific tool-call evidence and recommends one
+concrete action, prepared for one-click human approval.
+
+Single Python process plus a Next.js dashboard. SQLite for dev, DuckDB for
+single-node prod, Snowflake for multi-tenant prod. Schemas first, evals
+first, no surprise vendor lock-in.
 
 > Status: scaffold. All 10 BRIEF.md steps landed; the LLM call is mocked
 > until a default model is chosen (BRIEF.md §13). Tests: 37/37 green. Eval:
@@ -157,12 +166,6 @@ real LLM regression once a default model is chosen.
    is the natural next layer; held until decisions 1-2 are made so we
    migrate the schema once.
 
-## Forbidden in v1 (BRIEF.md §12)
-
-No auth / RBAC / SSO. No DB beyond SQLite / DuckDB / Snowflake. No web
-framework beyond Next.js App Router. No streaming / WebSockets by default.
-No copying code from external repos. No `--no-verify` ever.
-
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE).
