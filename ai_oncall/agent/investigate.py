@@ -1,12 +1,13 @@
 """Stage 4 — INVESTIGATE. Tool-using loop. Hard cap: 8 tool calls per incident
 (BRIEF.md §6).
 
-The agent is given the InvestigationPlan from stage 3 and the 6 tools. It
-issues queries, reads small bounded results, and refines its hypothesis list.
-The loop returns a context bundle that stage 5 (SYNTHESIZE) consumes.
+Given a (possibly causally pruned) hypothesis list and the 6 tools, the
+agent issues queries, reads small bounded results, and refines its
+hypothesis list. The loop returns a context bundle that stage 5 (SYNTHESIZE)
+consumes.
 
-This baseline implementation executes every query in the plan in order — it
-does NOT yet do iterative LLM-driven refinement; that lands as `investigate_v2`
+This baseline implementation executes every query in order — it does NOT
+yet do iterative LLM-driven refinement; that lands as `investigate_v2`
 once the baseline metrics are recorded. Keeping the iteration deterministic
 makes the baseline reproducible against fixtures.
 """
@@ -17,12 +18,14 @@ import time
 from typing import Any
 
 from ai_oncall.agent.tools import MAX_TOOL_CALLS_PER_INCIDENT, TOOL_REGISTRY
-from ai_oncall.models import InvestigationPlan, ToolCallRecord
+from ai_oncall.models import PlannedHypothesis, ToolCallRecord
 from ai_oncall.storage.base import TelemetryStore
 
 
 def investigate(
-    plan: InvestigationPlan, store: TelemetryStore
+    tenant_id: str,
+    hypotheses: list[PlannedHypothesis],
+    store: TelemetryStore,
 ) -> tuple[list[ToolCallRecord], dict[str, Any]]:
     """Execute the planned queries up to MAX_TOOL_CALLS_PER_INCIDENT.
 
@@ -33,7 +36,7 @@ def investigate(
     bundle: dict[str, Any] = {"results": []}
     budget = MAX_TOOL_CALLS_PER_INCIDENT
 
-    for hypothesis in plan.hypotheses:
+    for hypothesis in hypotheses:
         for query in hypothesis.queries:
             if budget <= 0:
                 bundle["budget_exhausted"] = True
@@ -41,7 +44,7 @@ def investigate(
             tool = TOOL_REGISTRY[query.tool]
             t0 = time.perf_counter()
             try:
-                result = tool(store, plan.tenant_id, **query.input)
+                result = tool(store, tenant_id, **query.input)
                 summary = _summarize(query.tool, result)
                 size = _size(result)
                 error = None
