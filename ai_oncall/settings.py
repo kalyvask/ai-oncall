@@ -10,7 +10,7 @@ from typing import Literal
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-TelemetryDriver = Literal["sqlite", "duckdb", "snowflake"]
+TelemetryDriver = Literal["sqlite", "duckdb", "snowflake", "live"]
 LlmProvider = Literal["anthropic", "openai", "mock"]
 
 
@@ -23,6 +23,15 @@ class Settings(BaseSettings):
     cost_ceiling_usd: float = Field(default=0.50, ge=0)
     log_json: bool = False
     data_dir: str = "data"
+
+    # Live store (AI_ONCALL_TELEMETRY_STORE=live). Required when live is
+    # selected; ignored otherwise.
+    prometheus_url: str | None = None
+    prometheus_service_label: str = "service"
+    prometheus_token: str | None = None
+    loki_url: str | None = None
+    loki_service_label: str = "service"
+    loki_token: str | None = None
 
 
 settings = Settings()
