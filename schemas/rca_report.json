@@ -107,6 +107,19 @@
           "runbook_link": {
             "type": ["string", "null"],
             "description": "Path under runbooks/ if a matching one exists."
+          },
+          "staged_action": {
+            "type": ["object", "null"],
+            "description": "Structured form of recommended_action plus a trust tier (recommend / propose / auto). The runtime decides what to do with each tier; the LLM does not.",
+            "required": ["kind", "service", "tier"],
+            "properties": {
+              "kind": {"type": "string", "enum": ["rollback", "restart", "scale", "feature_flag", "manual", "noop"]},
+              "service": {"type": "string"},
+              "params": {"type": "object"},
+              "tier": {"type": "string", "enum": ["recommend", "propose", "auto"]},
+              "rationale": {"type": ["string", "null"]},
+              "runbook_ref": {"type": ["string", "null"]}
+            }
           }
         }
       }

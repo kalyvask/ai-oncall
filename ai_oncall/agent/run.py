@@ -1,5 +1,5 @@
 """End-to-end orchestrator: RECEIVE -> PLAN -> PRUNE -> INVESTIGATE ->
-SYNTHESIZE -> CORRELATE.
+SYNTHESIZE -> CORRELATE -> STAGE_ACTIONS.
 
 This is the seam the CLI (`ai-oncall rca`) and the FastAPI agent endpoint both
 call. Slack delivery (stage 6) wraps the result; the LEARN step (stage 7)
@@ -10,9 +10,11 @@ hypotheses whose claimed root cause is unreachable from the alerting service,
 freeing the 8-call budget for plausible candidates only.
 
 The CORRELATE step (item 4) sits after SYNTHESIZE; it attaches the most
-recent deploy diff for each hypothesis's `root_cause_service` as evidence,
-fetching from GitHub when the local ChangeEvent does not already carry a
-patch excerpt.
+recent deploy diff for each hypothesis's `root_cause_service` as evidence.
+
+The STAGE_ACTIONS step (item 5) classifies each hypothesis's recommended
+action into one of three trust tiers (recommend / propose / auto) for the
+delivery surfaces to act on.
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ from ai_oncall.agent.causal import claimed_services, prune_plan
 from ai_oncall.agent.correlation import correlate_changes
 from ai_oncall.agent.investigate import investigate
 from ai_oncall.agent.plan import plan as plan_stage
+from ai_oncall.agent.staging import stage_actions
 from ai_oncall.agent.synthesize import synthesize
 from ai_oncall.llm.client import LlmClient
 from ai_oncall.models import Alert, RcaReport
@@ -45,7 +48,8 @@ def run_rca(alert: Alert, store: TelemetryStore, llm: LlmClient) -> RcaReport:
             for p in pruned.pruned
         ]
     report = synthesize(alert, context=bundle, llm=llm, tool_calls=trace)
-    return correlate_changes(report, store, github=_make_github_client())
+    report = correlate_changes(report, store, github=_make_github_client())
+    return stage_actions(report)
 
 
 def _make_github_client() -> GitHubClient | None:

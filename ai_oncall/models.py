@@ -168,6 +168,28 @@ class EvidenceItem(_Lax):
     source: str
 
 
+ActionKind = Literal["rollback", "restart", "scale", "feature_flag", "manual", "noop"]
+ActionTier = Literal["recommend", "propose", "auto"]
+
+
+class StagedAction(_Lax):
+    """Structured form of `recommended_action` plus a trust tier.
+
+    `recommend` (default): the agent surfaces the action; a human runs it.
+    `propose`            : the agent attaches an approval button; a human
+                           must click before anything runs.
+    `auto`               : the action matches a whitelist (kind + confidence
+                           thresholds); the runtime executes it in a sandbox.
+    """
+
+    kind: ActionKind
+    service: str
+    params: dict[str, Any] = Field(default_factory=dict)
+    tier: ActionTier
+    rationale: str | None = None
+    runbook_ref: str | None = None
+
+
 class Hypothesis(_Strict):
     root_cause_service: str
     root_cause_datetime: datetime | None = None
@@ -176,6 +198,7 @@ class Hypothesis(_Strict):
     evidence: list[EvidenceItem] = Field(min_length=1, max_length=8)
     recommended_action: str
     runbook_link: str | None = None
+    staged_action: StagedAction | None = None
 
 
 class ModelRef(_Lax):
