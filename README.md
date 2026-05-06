@@ -193,6 +193,80 @@ The synthetic track passes `make eval` with perfect 1.00 / 1.00 / 2.00 / 1.00
 in replay mode; thresholds (0.80 / 0.50 / 1.50 / 0.80) leave headroom for the
 real LLM regression once a default model is chosen.
 
+## Where this is going
+
+The 2026 AI-SRE category is being defined by **Resolve** (multi-agent
+plus graduated-trust auto-remediation), **Traversal** (causal search
+engine over a continuously-learned production world model), and on the
+open-source side **IncidentFox** and **OpenSRE** (breadth of
+integrations, 25 to 60-plus connectors). Compared to that field, the
+four moats this scaffold needs to close are:
+
+1. Causal, graph-aware investigation rather than an LLM loop over flat tools.
+2. Graduated-trust auto-remediation, not recommendations only.
+3. Code-and-change correlation, tying a hypothesis to the diff that caused it.
+4. Integration breadth, replacing the 6 mock tools with live observability.
+
+The roadmap below is ordered by what closes the moat gap first, not by
+implementation difficulty.
+
+### Tier 1: close the moat gap
+
+1. **Live observability connectors via MCP.** Prometheus, Loki or
+   CloudWatch, and one APM (Datadog or Honeycomb) at minimum. Retires
+   the 6 mock tools. Without this nothing else can be evaluated against
+   real data.
+2. **Dynamic topology from traces.** Build the service graph from a 24h
+   OTel-spans window. `topology.yaml` becomes a fallback, not the source
+   of truth. Foundation for everything causal.
+3. **Causal hypothesis elimination over the graph.** Before the LLM
+   loop, prune hypotheses that violate topology and timing constraints.
+   Deterministic constraint propagation, not LLM-driven. This is
+   Traversal's actual moat translated into a small open-source piece.
+4. **Code-and-change correlation.** GitHub MCP connector. For each
+   ranked hypothesis, fetch the diff of the last deploy on the
+   implicated service and surface suspect lines as evidence.
+5. **Action staging with graduated trust.** Three tiers: `recommend`
+   (default), `propose` (Slack approval button), `auto` (whitelisted
+   runbooks only, e.g. rollback last deploy on service X). Sandboxed
+   execution. Replaces the placeholder `recommended_action` field with
+   a structured surface.
+
+### Tier 2: credibility and learning
+
+6. Embeddings-backed past-incident retrieval, replacing the SQL `LIKE`
+   in `learnings/store.py`. Hierarchical (RAPTOR-style) retrieval over
+   runbooks plus post-mortems.
+7. Multi-alert correlation and deduplication before the agent spends
+   tokens. Single-alert mode wastes budget on storms.
+8. Specialist sub-agents (K8s, AWS, metrics, code) with a router that
+   dispatches in parallel. Mirrors PagerDuty GenAI and Resolve.
+9. Wire the RCAEval and OpenRCA stubs in `evals/` to a real harness.
+   The synthetic 6-family eval is not a regression signal anyone outside
+   this repo will trust.
+10. Confidence tiers in the RCA output (Bullseye / Directional /
+    Probable). Maps cleanly onto the existing ranked-hypothesis
+    schema.
+
+### Tier 3: workflow
+
+11. Post-mortem auto-draft and Jira/Linear ticket creation for follow-ups.
+12. Proactive layer: anomaly detection on SLIs and post-deploy
+    verification. Turns ai-oncall from reactive to proactive.
+13. MCP server, so Cursor and Claude Desktop can drive investigations
+    directly.
+14. Live cost meter with auto-degrade to a cheaper model at 80% of the
+    per-incident budget. Operationalizes the existing
+    `AI_ONCALL_COST_CEILING_USD`.
+15. PagerDuty / incident.io ingest, replacing the synthetic webhook in
+    `ingest/alerts.py`.
+
+If only three of these ship, do 2, 3, and 5: dynamic topology, causal
+pruning, and graduated-trust actions. Those are what move this from
+"LLM loop over mocked tools" to the thing Traversal and Resolve
+actually sell. Integration breadth (#1) is necessary but commodity
+work; the moat is in 2 through 5.
+
 ## Open decisions (BRIEF.md §13 — ask before deciding)
 
 1. **Final product name.** `ai-oncall` is a placeholder.
@@ -201,10 +275,9 @@ real LLM regression once a default model is chosen.
    `AI_ONCALL_COST_CEILING_USD`.
 3. **GitHub repo name** if this one is meant as a placeholder.
 4. **Action staging** — see `BRIEF.md` §6 / `UI_DESIGN.md` §6 plus the
-   `recommended_action` field on every hypothesis. The structured action
-   surface (low / medium / high blast radius, per-class approval thresholds)
-   is the natural next layer; held until decisions 1-2 are made so we
-   migrate the schema once.
+   `recommended_action` field on every hypothesis. Tier 1 item 5 above
+   is the structured implementation; held until decisions 1-2 are made
+   so we migrate the schema once.
 
 ## License
 
