@@ -15,6 +15,7 @@ from typing import Any
 
 from jsonschema import ValidationError
 
+from ai_oncall.agent.observability import LlmTracer
 from ai_oncall.agent.prompts import synthesize_v1
 from ai_oncall.llm.client import LlmClient
 from ai_oncall.llm.registry import CATALOG, estimate_cost
@@ -48,15 +49,23 @@ def synthesize(
     llm: LlmClient,
     *,
     tool_calls: list[ToolCallRecord] | None = None,
+    tracer: LlmTracer | None = None,
 ) -> RcaReport:
     """Run the SYNTHESIZE stage. Returns an RcaReport that has already been
     schema-validated. Raises ValidationError if the LLM produced malformed JSON.
 
     `tool_calls` is the trace from stage 4 INVESTIGATE; pass None for the
-    single-shot baseline.
+    single-shot baseline. `tracer`, when supplied, captures every LLM call
+    made across the pipeline; the records are attached to
+    `report.investigation.llm_calls`.
     """
     prompt = _build_prompt(alert, context)
-    response = llm.generate(prompt, max_tokens=2048)
+    if tracer is not None:
+        response = tracer.call(
+            llm, prompt, stage="synthesize", prompt_version="synthesize_v1", max_tokens=2048
+        )
+    else:
+        response = llm.generate(prompt, max_tokens=2048)
 
     text = response.get("text", "").strip()
     try:
@@ -71,6 +80,7 @@ def synthesize(
     payload.setdefault("model", _model_ref().model_dump())
 
     cost = estimate_cost(_model_alias(), response.get("tokens_in", 0), response.get("tokens_out", 0))
+    llm_call_records = list(tracer.records) if tracer is not None else []
     # The investigation field reflects what the agent ACTUALLY ran, not what
     # the LLM may have hallucinated. Overwrite if tool_calls were supplied.
     if tool_calls is not None:
@@ -79,7 +89,8 @@ def synthesize(
             tokens_in=response.get("tokens_in", 0),
             tokens_out=response.get("tokens_out", 0),
             cost_usd=cost,
-        ).model_dump()
+            llm_calls=llm_call_records,
+        ).model_dump(mode="json")
     else:
         payload.setdefault(
             "investigation",
@@ -88,7 +99,8 @@ def synthesize(
                 tokens_in=response.get("tokens_in", 0),
                 tokens_out=response.get("tokens_out", 0),
                 cost_usd=cost,
-            ).model_dump(),
+                llm_calls=llm_call_records,
+            ).model_dump(mode="json"),
         )
     if cost > settings.cost_ceiling_usd:
         raise RuntimeError(f"cost ${cost:.4f} exceeds ceiling ${settings.cost_ceiling_usd:.2f}")

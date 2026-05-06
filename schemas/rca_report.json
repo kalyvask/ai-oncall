@@ -52,7 +52,27 @@
         },
         "tokens_in": {"type": "integer", "minimum": 0},
         "tokens_out": {"type": "integer", "minimum": 0},
-        "cost_usd": {"type": "number", "minimum": 0}
+        "cost_usd": {"type": "number", "minimum": 0},
+        "llm_calls": {
+          "type": "array",
+          "description": "One row per LLM round-trip. Captures prompt version + hash, model, tokens, cost, latency, error.",
+          "items": {
+            "type": "object",
+            "required": ["stage", "prompt_version", "prompt_hash", "model_id", "latency_ms"],
+            "properties": {
+              "stage": {"type": "string", "enum": ["plan", "synthesize", "investigate", "other"]},
+              "prompt_version": {"type": "string", "minLength": 1},
+              "prompt_hash": {"type": "string", "minLength": 8, "maxLength": 64},
+              "model_id": {"type": "string"},
+              "tokens_in": {"type": ["integer", "null"], "minimum": 0},
+              "tokens_out": {"type": ["integer", "null"], "minimum": 0},
+              "cost_usd": {"type": ["number", "null"], "minimum": 0},
+              "latency_ms": {"type": "number", "minimum": 0},
+              "error": {"type": ["string", "null"]},
+              "started_at": {"type": ["string", "null"], "format": "date-time"}
+            }
+          }
+        }
       }
     },
     "hypotheses": {

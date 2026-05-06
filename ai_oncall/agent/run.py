@@ -22,6 +22,7 @@ from __future__ import annotations
 from ai_oncall.agent.causal import claimed_services, prune_plan
 from ai_oncall.agent.correlation import correlate_changes
 from ai_oncall.agent.investigate import investigate
+from ai_oncall.agent.observability import LlmTracer
 from ai_oncall.agent.plan import plan as plan_stage
 from ai_oncall.agent.staging import stage_actions
 from ai_oncall.agent.synthesize import synthesize
@@ -34,7 +35,8 @@ from ai_oncall.topology.builder import build as build_topology
 
 
 def run_rca(alert: Alert, store: TelemetryStore, llm: LlmClient) -> RcaReport:
-    plan_obj = plan_stage(alert, llm)
+    tracer = LlmTracer()
+    plan_obj = plan_stage(alert, llm, tracer=tracer)
     topology = build_topology(alert.tenant_id, store)
     pruned = prune_plan(plan_obj, alert, topology)
     trace, bundle = investigate(alert.tenant_id, pruned.active, store)
@@ -47,7 +49,7 @@ def run_rca(alert: Alert, store: TelemetryStore, llm: LlmClient) -> RcaReport:
             }
             for p in pruned.pruned
         ]
-    report = synthesize(alert, context=bundle, llm=llm, tool_calls=trace)
+    report = synthesize(alert, context=bundle, llm=llm, tool_calls=trace, tracer=tracer)
     report = correlate_changes(report, store, github=_make_github_client())
     return stage_actions(report)
 

@@ -156,11 +156,28 @@ class ToolCallRecord(_Lax):
     duration_ms: float = Field(ge=0)
 
 
+class LlmCallRecord(_Lax):
+    """One row per LLM round-trip. Attached to Investigation alongside the
+    tool-call trace; the reasoning-trace tab in the UI reads from this."""
+
+    stage: Literal["plan", "synthesize", "investigate", "other"]
+    prompt_version: str = Field(min_length=1)
+    prompt_hash: str = Field(min_length=8, max_length=64)
+    model_id: str
+    tokens_in: int | None = Field(default=None, ge=0)
+    tokens_out: int | None = Field(default=None, ge=0)
+    cost_usd: float | None = Field(default=None, ge=0)
+    latency_ms: float = Field(ge=0)
+    error: str | None = None
+    started_at: datetime | None = None
+
+
 class Investigation(_Lax):
     tool_calls: list[ToolCallRecord] = Field(default_factory=list)
     tokens_in: int | None = Field(default=None, ge=0)
     tokens_out: int | None = Field(default=None, ge=0)
     cost_usd: float | None = Field(default=None, ge=0)
+    llm_calls: list[LlmCallRecord] = Field(default_factory=list)
 
 
 class EvidenceItem(_Lax):
