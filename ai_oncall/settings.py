@@ -33,5 +33,11 @@ class Settings(BaseSettings):
     loki_service_label: str = "service"
     loki_token: str | None = None
 
+    # GitHub change-correlation (item 4). When unset, correlation falls back
+    # to whatever patch_excerpt is already on the local ChangeEvent.
+    github_token: str | None = None
+    github_repo: str | None = None
+    github_api_url: str = "https://api.github.com"
+
 
 settings = Settings()
