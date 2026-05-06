@@ -21,6 +21,46 @@ The product contract lives in [BRIEF.md](BRIEF.md). The visual contract for
 the Next.js UI lives in [UI_DESIGN.md](UI_DESIGN.md). Read those before
 changing anything.
 
+## Personalize this for your own use
+
+If you've forked or cloned this repo, do these steps in order before running
+anything against your own infrastructure. See [Quick start](#quick-start)
+below for full env-var details and the install commands.
+
+1. **Copy `.env.example` to `.env`** at the repo root. Do not commit `.env`
+   — it is already in `.gitignore`.
+2. **Set `ANTHROPIC_API_KEY`** in `.env` to your own Anthropic key. Required
+   the moment you flip `AI_ONCALL_LLM_PROVIDER` off `mock`.
+3. **Pick your LLM provider and model.** Set `AI_ONCALL_LLM_PROVIDER`
+   (`anthropic` / `openai` / `mock`) and `AI_ONCALL_RCA_MODEL` (default
+   `claude-haiku-4-5-20251001`). Adjust `AI_ONCALL_COST_CEILING_USD` to
+   your per-incident budget.
+4. **Pick your telemetry store.** Set `AI_ONCALL_TELEMETRY_STORE` to
+   `sqlite` (dev), `duckdb` (single-node prod), or `snowflake` (multi-tenant
+   prod). For Snowflake, supply your own connection credentials in `.env`.
+5. **Replace `topology.yaml`** with your own services and dependency edges.
+   The shipped file is a synthetic checkout / cart / payment graph used by
+   the fixtures — your services will not match it.
+6. **Replace the runbooks in `runbooks/`.** The shipped `checkout.md` is a
+   sample. Drop in one Markdown runbook per service or failure family the
+   agent should be able to retrieve via `get_runbook`.
+7. **Wire your Slack workspace.** `ai_oncall/delivery/slack.py` is a pure
+   Block Kit formatter; supply your Slack bot token and target channel via
+   the transport layer (`send.py`, TODO in this scaffold) when you enable
+   real posting.
+8. **Wire your alert sources.** Point PagerDuty / Slack / OTLP / manual
+   webhooks at the FastAPI server (`POST /alerts`). Each request must
+   include an `X-Tenant-Id` header — tenancy is the deployment's job, there
+   is no login screen.
+9. **Per-tenant config.** All rows are filtered by `tenant_id`; pick a
+   tenant ID per customer or per environment and pass it on every request.
+10. **Local state stays local.** SQLite/DuckDB databases land in `data/`
+    and `learnings.jsonl` is appended in place. Both paths are gitignored —
+    do not commit them.
+11. **Fork the eval cases.** Edit `evals/cases/` and
+    `fixtures/synthetic_alerts/` to reflect your own fault families before
+    you trust eval scores as a regression signal.
+
 ## What it does
 
 1. Receives an alert (PagerDuty / Slack / manual / OTLP).
