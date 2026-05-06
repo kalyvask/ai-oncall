@@ -23,8 +23,9 @@ from pydantic import ValidationError as ModelValidationError
 
 from ai_oncall.ingest.alerts import receive
 from ai_oncall.logging_setup import configure
+from ai_oncall.storage.factory import make_store
 from ai_oncall.storage.tenancy import tenant_middleware
-from ai_oncall.topology.builder import load_static
+from ai_oncall.topology.builder import build as build_topology
 
 configure()
 app = FastAPI(title="ai-oncall", version="0.0.1")
@@ -52,5 +53,6 @@ async def alert_webhook(request: Request) -> JSONResponse:
 
 @app.get("/topology")
 def topology(request: Request) -> JSONResponse:
-    snapshot = load_static(request.state.tenant_id)
+    store = make_store()
+    snapshot = build_topology(request.state.tenant_id, store)
     return JSONResponse(snapshot.model_dump(mode="json", by_alias=True))

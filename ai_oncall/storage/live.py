@@ -64,3 +64,14 @@ class LiveStore(TelemetryStore):
         self, tenant_id: str, service: str, since: datetime
     ) -> list[ChangeEvent]:
         return self._deploys.recent_deploys(tenant_id, service, since)
+
+    def query_spans(
+        self, tenant_id: str, since: datetime, limit: int = 5000
+    ) -> list[TelemetryRecord]:
+        # Live mode does not yet ship an APM/traces backend; the topology
+        # builder catches NotImplementedError and falls back to topology.yaml.
+        # An APM connector (Honeycomb / Datadog) plugs in here.
+        raise NotImplementedError(
+            "LiveStore does not have an APM/traces backend yet. "
+            "Topology builder will fall back to topology.yaml."
+        )

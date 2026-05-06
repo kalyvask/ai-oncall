@@ -116,3 +116,13 @@ WHERE tenant_id = ? AND service = ? AND timestamp >= ?
 ORDER BY timestamp DESC
 LIMIT 25
 """
+
+QUERY_SPANS = """
+SELECT tenant_id, kind, service, timestamp, trace_id, span_id, parent_span_id,
+       name, duration_ms, status, metric_value, metric_unit, severity, body,
+       attributes_json
+FROM telemetry
+WHERE tenant_id = ? AND kind = 'trace' AND timestamp >= ?
+ORDER BY timestamp DESC
+LIMIT ?
+"""

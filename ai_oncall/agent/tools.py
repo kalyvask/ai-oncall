@@ -20,7 +20,7 @@ from ai_oncall.models import (
     TopologySnapshot,
 )
 from ai_oncall.storage.base import TelemetryStore
-from ai_oncall.topology.builder import load_static
+from ai_oncall.topology.builder import build as build_topology
 
 
 def _parse_iso(value: str) -> datetime:
@@ -83,13 +83,13 @@ def get_runbook(_store: TelemetryStore, _tenant_id: str, *, service: str) -> str
 
 
 def get_topology(
-    _store: TelemetryStore,
+    store: TelemetryStore,
     tenant_id: str,
     *,
     service: str,
     depth: int = 2,
 ) -> dict[str, Any]:
-    snap: TopologySnapshot = load_static(tenant_id)
+    snap: TopologySnapshot = build_topology(tenant_id, store)
     nodes = {n.service: n for n in snap.nodes}
     if service not in nodes:
         return {"service": service, "nodes": [], "edges": []}

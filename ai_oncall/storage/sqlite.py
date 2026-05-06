@@ -92,6 +92,14 @@ class SqliteStore(TelemetryStore):
         ).fetchall()
         return [_row_to_change(r) for r in rows]
 
+    def query_spans(
+        self, tenant_id: str, since: datetime, limit: int = 5000
+    ) -> list[TelemetryRecord]:
+        rows = self._conn.execute(
+            _sql.QUERY_SPANS, (tenant_id, since.isoformat(), limit)
+        ).fetchall()
+        return [_row_to_record(r) for r in rows]
+
 
 def _row_to_record(row: tuple) -> TelemetryRecord:
     return TelemetryRecord.model_validate({

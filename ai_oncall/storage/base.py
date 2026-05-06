@@ -42,3 +42,8 @@ class TelemetryStore(ABC):
     def recent_deploys(
         self, tenant_id: str, service: str, since: datetime
     ) -> list[ChangeEvent]: ...
+
+    @abstractmethod
+    def query_spans(
+        self, tenant_id: str, since: datetime, limit: int = 5000
+    ) -> list[TelemetryRecord]: ...

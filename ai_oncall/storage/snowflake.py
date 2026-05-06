@@ -47,3 +47,8 @@ class SnowflakeStore(TelemetryStore):
         self, tenant_id: str, service: str, since: datetime
     ) -> list[ChangeEvent]:
         raise NotImplementedError(_MSG)
+
+    def query_spans(
+        self, tenant_id: str, since: datetime, limit: int = 5000
+    ) -> list[TelemetryRecord]:
+        raise NotImplementedError(_MSG)

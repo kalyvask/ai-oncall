@@ -99,4 +99,20 @@ class DuckDbStore(TelemetryStore):
             }))
         return out
 
+    def query_spans(
+        self, tenant_id: str, since: datetime, limit: int = 5000
+    ) -> list[TelemetryRecord]:
+        rows = self._conn.execute(_sql.QUERY_SPANS, [tenant_id, since.isoformat(), limit]).fetchall()
+        out: list[TelemetryRecord] = []
+        for row in rows:
+            out.append(TelemetryRecord.model_validate({
+                "tenant_id": row[0], "kind": row[1], "service": row[2],
+                "timestamp": row[3], "trace_id": row[4], "span_id": row[5],
+                "parent_span_id": row[6], "name": row[7], "duration_ms": row[8],
+                "status": row[9], "metric_value": row[10], "metric_unit": row[11],
+                "severity": row[12], "body": row[13],
+                "attributes": json.loads(row[14]) if row[14] else {},
+            }))
+        return out
+
 
