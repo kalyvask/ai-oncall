@@ -88,5 +88,108 @@ def rca(
     typer.echo(report.model_dump_json(by_alias=True, exclude_none=True, indent=2))
 
 
+@app.command()
+def replay(
+    report_id: str | None = typer.Argument(
+        None, help="Stored report id. Omit and pass --batch-from to replay many."
+    ),
+    batch_from: Path | None = typer.Option(
+        None,
+        "--batch-from",
+        help="Path to a text file with one report_id per line; replays each.",
+    ),
+    fail_on_regression: bool = typer.Option(
+        True,
+        "--fail-on-regression/--no-fail-on-regression",
+        help="Exit non-zero if any replay regresses (use in CI).",
+    ),
+    json_out: bool = typer.Option(
+        False, "--json", help="Emit machine-readable JSON instead of a table."
+    ),
+) -> None:
+    """Re-run the pipeline on a stored incident and diff against the saved report."""
+    configure()
+    from ai_oncall.agent.replay import replay_batch, replay_incident
+    from ai_oncall.storage.factory import make_store
+
+    store = make_store()
+
+    ids: list[str] = []
+    if batch_from is not None:
+        ids = [
+            line.strip()
+            for line in batch_from.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.startswith("#")
+        ]
+    elif report_id:
+        ids = [report_id]
+    else:
+        raise typer.BadParameter("Provide a REPORT_ID or --batch-from <file>")
+
+    if len(ids) == 1:
+        diff = replay_incident(ids[0], store=store)
+        if json_out:
+            typer.echo(
+                json.dumps(
+                    {
+                        "report_id": diff.report_id,
+                        "verdict": diff.verdict,
+                        "confidence_delta": diff.confidence_delta,
+                        "differences": diff.differences,
+                    },
+                    indent=2,
+                )
+            )
+        else:
+            typer.echo(f"\nreplay {diff.report_id}:")
+            typer.echo(f"  verdict           : {diff.verdict}")
+            typer.echo(f"  same top          : {diff.same_top_hypothesis}")
+            typer.echo(f"  same class        : {diff.same_root_cause_class}")
+            typer.echo(f"  confidence delta  : {diff.confidence_delta:+.2f}")
+            typer.echo(f"  escalation change : {diff.escalation_changed}")
+            for d in diff.differences:
+                typer.echo(f"   - {d}")
+        if fail_on_regression and diff.verdict == "regression":
+            raise typer.Exit(1)
+        return
+
+    result = replay_batch(ids, store=store)
+    if json_out:
+        typer.echo(
+            json.dumps(
+                {
+                    "total": result.total,
+                    "matches": result.matches,
+                    "drifts": result.drifts,
+                    "regressions": result.regressions,
+                    "improvements": result.improvements,
+                    "regression_rate": result.regression_rate,
+                    "diffs": [
+                        {
+                            "report_id": d.report_id,
+                            "verdict": d.verdict,
+                            "differences": d.differences,
+                        }
+                        for d in result.diffs
+                    ],
+                },
+                indent=2,
+            )
+        )
+    else:
+        typer.echo(f"\nbatch replay over {result.total} incidents:")
+        typer.echo(f"  matches      : {result.matches}")
+        typer.echo(f"  drifts       : {result.drifts}")
+        typer.echo(f"  improvements : {result.improvements}")
+        typer.echo(f"  regressions  : {result.regressions}")
+        if result.regressions:
+            typer.echo("\nregressions:")
+            for d in result.diffs:
+                if d.verdict == "regression":
+                    typer.echo(f"  - {d.report_id}: {'; '.join(d.differences)}")
+    if fail_on_regression and result.regressions > 0:
+        raise typer.Exit(1)
+
+
 if __name__ == "__main__":
     app()

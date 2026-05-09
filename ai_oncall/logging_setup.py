@@ -39,3 +39,10 @@ def configure() -> None:
     root = logging.getLogger()
     root.handlers[:] = [handler]
     root.setLevel(logging.INFO)
+
+    # Surface unsafe-config warnings once at startup so misconfigurations
+    # don't silently degrade. Late import to avoid a settings circular dep.
+    from ai_oncall.settings import warn_unsafe_settings
+
+    for warning in warn_unsafe_settings():
+        logging.getLogger("ai_oncall.settings").warning(warning)

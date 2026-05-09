@@ -39,5 +39,41 @@ class Settings(BaseSettings):
     github_repo: str | None = None
     github_api_url: str = "https://api.github.com"
 
+    # Slack interactivity (delivery/reactions.py). Required for the
+    # /webhooks/slack/action endpoint to verify inbound payloads.
+    slack_signing_secret: str | None = None
+
+    # Continuous-delivery dispatch endpoint (delivery/cd_dispatch.py). When
+    # unset, the one-click rollback action records a dry-run audit and stops.
+    # `cd_dispatch_secret` is the HMAC secret the receiver verifies with.
+    # Refusing to dispatch without a secret is intentional: an unauthenticated
+    # rollback URL on the public internet is a foot-gun.
+    cd_dispatch_url: str | None = None
+    cd_dispatch_secret: str | None = None
+
 
 settings = Settings()
+
+
+def warn_unsafe_settings() -> list[str]:
+    """Return a list of human-readable warnings about the current config.
+
+    Called by `logging_setup.configure()` and the CLI's startup banner so
+    misconfigurations show up loudly rather than silently degrading.
+    """
+    warnings: list[str] = []
+    if settings.cd_dispatch_url and not settings.cd_dispatch_secret:
+        warnings.append(
+            "AI_ONCALL_CD_DISPATCH_URL is set but AI_ONCALL_CD_DISPATCH_SECRET is "
+            "not. Outgoing rollback requests will not carry an HMAC signature; "
+            "the receiver cannot verify the sender. Configure the secret or "
+            "remove the URL."
+        )
+    if settings.slack_signing_secret is None:
+        warnings.append(
+            "AI_ONCALL_SLACK_SIGNING_SECRET is unset. The Slack interaction "
+            "endpoints will reject every request because verify_slack_signature "
+            "refuses to allow unsigned traffic. Set the secret to enable Slack "
+            "buttons and thread Q&A."
+        )
+    return warnings

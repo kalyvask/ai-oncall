@@ -19,6 +19,10 @@ delivery surfaces to act on.
 
 from __future__ import annotations
 
+import logging
+from datetime import datetime, timedelta, timezone
+
+from ai_oncall.agent.calibration import calibrate
 from ai_oncall.agent.causal import claimed_services, prune_plan
 from ai_oncall.agent.correlation import correlate_changes
 from ai_oncall.agent.investigate import investigate
@@ -26,12 +30,16 @@ from ai_oncall.agent.observability import LlmTracer
 from ai_oncall.agent.plan import plan as plan_stage
 from ai_oncall.agent.staging import stage_actions
 from ai_oncall.agent.synthesize import synthesize
+from ai_oncall.agent.tools import get_past_incidents, get_recent_deploys
+from ai_oncall.learnings.incidents import save_incident
 from ai_oncall.llm.client import LlmClient
 from ai_oncall.models import Alert, RcaReport
 from ai_oncall.settings import settings
 from ai_oncall.storage.base import TelemetryStore
 from ai_oncall.storage.github import GitHubClient
 from ai_oncall.topology.builder import build as build_topology
+
+logger = logging.getLogger(__name__)
 
 
 def run_rca(alert: Alert, store: TelemetryStore, llm: LlmClient) -> RcaReport:
@@ -51,7 +59,89 @@ def run_rca(alert: Alert, store: TelemetryStore, llm: LlmClient) -> RcaReport:
         ]
     report = synthesize(alert, context=bundle, llm=llm, tool_calls=trace, tracer=tracer)
     report = correlate_changes(report, store, github=_make_github_client())
-    return stage_actions(report)
+    report = stage_actions(report)
+
+    # Calibrated abstention: deterministic post-pass that overrides the LLM's
+    # escalation flag when the evidence doesn't actually support the verdict.
+    report, calibration = _apply_calibration(report, store)
+
+    # Persist the report so replay + the typed memory graph have something to
+    # read back. Failures here must never break the live RCA path; log and
+    # continue.
+    try:
+        save_incident(report, abstained=calibration.abstain)
+    except Exception:  # pragma: no cover — defensive
+        logger.exception("save_incident_failed", extra={"report_id": report.report_id})
+
+    return report
+
+
+def _apply_calibration(
+    report: RcaReport, store: TelemetryStore
+) -> tuple[RcaReport, "object"]:
+    """Pull the side-channel signals calibration needs, then run it.
+
+    Past incidents come from the typed memory graph (local tier only at this
+    layer; aggregated tier requires explicit caller opt-in). Recent deploys
+    come from the same storage the tools use.
+    """
+    top_root = report.hypotheses[0].root_cause_service if report.hypotheses else report.alert.service
+    since = datetime.now(timezone.utc) - timedelta(hours=24)
+
+    try:
+        recent_deploys = get_recent_deploys(
+            store, report.tenant_id, service=top_root, since=since.isoformat()
+        )
+    except Exception as e:
+        # Calibration without deploy history will probably fire cold_start.
+        # That's the safer failure mode (we abstain), but still surface so
+        # ops can fix the underlying store.
+        logger.warning(
+            "calibration_recent_deploys_unavailable",
+            extra={
+                "tenant_id": report.tenant_id,
+                "service": top_root,
+                "error_type": type(e).__name__,
+                "error": str(e)[:200],
+            },
+        )
+        recent_deploys = []
+
+    try:
+        past_incidents_raw = get_past_incidents(
+            store, report.tenant_id, service=report.alert.service, k=5
+        )
+        # Filter out the trailing summary item before passing in.
+        past_incidents = [p for p in past_incidents_raw if "_root_cause_class_summary" not in p]
+    except Exception as e:
+        logger.warning(
+            "calibration_past_incidents_unavailable",
+            extra={
+                "tenant_id": report.tenant_id,
+                "service": report.alert.service,
+                "error_type": type(e).__name__,
+                "error": str(e)[:200],
+            },
+        )
+        past_incidents = []
+
+    new_report, calibration = calibrate(
+        report,
+        recent_deploys=recent_deploys,
+        past_incidents=past_incidents,
+    )
+    if calibration.abstain:
+        logger.info(
+            "calibration_triggered_abstention",
+            extra={
+                "tenant_id": report.tenant_id,
+                "service": report.alert.service,
+                "report_id": report.report_id,
+                "rules": list(calibration.codes),
+                "confidence_cap": calibration.top_confidence_cap,
+            },
+        )
+    return new_report, calibration
 
 
 def _make_github_client() -> GitHubClient | None:

@@ -114,11 +114,64 @@ def get_topology(
 
 
 def get_past_incidents(
-    _store: TelemetryStore, _tenant_id: str, *, service: str, k: int = 3
+    _store: TelemetryStore,
+    tenant_id: str,
+    *,
+    service: str,
+    k: int = 3,
+    include_root_cause_classes: bool = True,
+    trust_tiers: tuple[str, ...] = ("local",),
 ) -> list[dict[str, Any]]:
-    """k-NN over learnings.jsonl. Stub returns []; lands fully in BRIEF.md step 7."""
-    _ = service, k
-    return []
+    """Past incidents and root-cause aggregates for a service.
+
+    Reads from `learnings/incidents.py` (full RCA reports) and the typed
+    memory graph (`service_root_cause_classes`). The agent uses both:
+    - the recent incident list anchors specific reasoning ("we saw this exact
+      pattern 4 days ago"),
+    - the root-cause class aggregate gives a prior ("checkout has had 7
+      deploy regressions and 2 saturations in the last 30 days").
+
+    `trust_tiers` controls cross-tenant aggregation. The default ("local",)
+    keeps the agent honest about which tenant it's reasoning over. Pass
+    `("local", "verified")` to widen.
+    """
+    # Late import to avoid pulling sqlite into modules that don't need it.
+    from ai_oncall.learnings.incidents import (
+        list_incidents,
+        list_root_cause_classes,
+    )
+
+    # Type-narrow the tier tuple in a way pydantic models accept later.
+    safe_tiers = tuple(t for t in trust_tiers if t in ("local", "aggregated", "verified"))
+    if not safe_tiers:
+        safe_tiers = ("local",)
+
+    incidents = list_incidents(
+        tenant_id=tenant_id, service=service, limit=k
+    )
+    out: list[dict[str, Any]] = []
+    for row in incidents:
+        out.append(
+            {
+                "report_id": row.report_id,
+                "alert_id": row.alert_id,
+                "root_cause_service": row.root_cause_service,
+                "root_cause_class": row.root_cause_class,
+                "top_confidence": row.top_confidence,
+                "abstained": row.abstained,
+                "created_at": row.created_at.isoformat(),
+            }
+        )
+
+    if include_root_cause_classes:
+        classes = list_root_cause_classes(
+            tenant_id=tenant_id, service=service, trust_tiers=safe_tiers
+        )
+        # Append as a single trailing item the LLM can scan in O(1).
+        if classes:
+            out.append({"_root_cause_class_summary": classes})
+
+    return out
 
 
 # --- registry ---------------------------------------------------------------

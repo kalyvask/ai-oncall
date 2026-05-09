@@ -147,16 +147,23 @@ ai-oncall/
       causal.py                     PRUNE — drops topology-impossible hypotheses
       investigate.py                stage 4 INVESTIGATE — tool-using loop
       synthesize.py                 stage 5 SYNTHESIZE — single-shot baseline
+      calibration.py                stage 5b — deterministic abstention rules
       correlation.py                CORRELATE — last-deploy diff per hypothesis
       staging.py                    STAGE_ACTIONS — recommend / propose / auto
       observability.py              LlmTracer — per-call prompt hash, tokens, cost
       tools.py                      6 tools (max 8 calls per incident)
+      replay.py                     re-run pipeline on a stored incident; diff
       run.py                        end-to-end orchestrator
       prompts/                      versioned per-stage prompt files
     delivery/
       slack.py                      Block Kit formatter (pure)
+      reactions.py                  Slack signature verify + action dispatcher
+      cd_dispatch.py                signed HMAC POST to a CD endpoint
+      thread_qa.py                  bounded follow-up investigation in a thread
       html.py                       static HTML export, OKLCH stylesheet
-    learnings/store.py              stage 7 LEARN — append + LIKE retrieval
+    learnings/
+      store.py                      stage 7 LEARN — append + LIKE retrieval
+      incidents.py                  full RCA persistence + typed memory graph
     storage/
       base.py                       TelemetryStore interface
       sqlite.py                     dev driver
@@ -209,8 +216,12 @@ after SYNTHESIZE).
 | 5 SYNTHESIZE | `agent/synthesize.py` | ✅ single-shot baseline |
 | 5a CORRELATE | `agent/correlation.py` | ✅ last-deploy diff per hypothesis (local + GitHub) |
 | 5b STAGE_ACTIONS | `agent/staging.py` | ✅ recommend / propose / auto tiers |
-| 6 POST | `delivery/{slack,html}.py` | ✅ pure formatters |
-| 7 LEARN | `learnings/store.py` | ✅ append + LIKE retrieval |
+| 5c CALIBRATE | `agent/calibration.py` | ✅ deterministic abstention (4 rules) |
+| 6 POST | `delivery/{slack,html}.py` | ✅ pure formatters + interactive Block Kit buttons on `propose` tier |
+| 6a SLACK ACTIONS | `delivery/reactions.py` + `cd_dispatch.py` | ✅ signed handler, HMAC-signed CD dispatch |
+| 6b SLACK THREAD Q&A | `delivery/thread_qa.py` | ✅ bounded follow-up loop (≤3 tool calls) |
+| 7 LEARN | `learnings/{store,incidents}.py` | ✅ append + LIKE retrieval + full RCA persistence + typed memory graph |
+| REPLAY | `agent/replay.py` + `ai-oncall replay <id>` | ✅ re-runs pipeline on stored incident, diffs vs original |
 
 ## The 6 tools the LLM gets (BRIEF.md §6)
 
@@ -223,6 +234,74 @@ structured payloads, all pinned to `tenant_id`. Hard cap: 8 calls per incident.
 `X-Tenant-Id` header on every request; `tenant_id` column on every row;
 filter enforced at the query layer. No login screen, no RBAC. Identity is
 the deployment's job (BRIEF.md §8 / §12).
+
+The `/webhooks/slack/*` endpoints are the only exemption: Slack signs each
+request with its own secret (verified at the edge) and the tenant is
+recovered from the persisted incident referenced in the action payload.
+
+## Cupcake additions (the engineer-facing 60-second loop)
+
+Five additions on top of the baseline pipeline that close Sam's 60-second
+decision moment without leaving Slack:
+
+1. **Calibrated abstention** (`agent/calibration.py`). Four deterministic
+   rules — cold_start, confidence_floor, budget_exhausted, two_strong_leads —
+   override the LLM's escalation flag when the evidence doesn't support a
+   verdict. The top hypothesis confidence is capped to 0.40 on cold_start
+   or budget_exhausted so Slack/HTML render a clear "low confidence" pill.
+
+2. **One-click Slack rollback** (`delivery/{slack,reactions,cd_dispatch}.py`).
+   `propose`-tier hypotheses render a Block Kit "Approve rollback" button.
+   Clicks hit `/webhooks/slack/action`, signature-verified against
+   `AI_ONCALL_SLACK_SIGNING_SECRET`, then HMAC-sign a JSON POST to
+   `AI_ONCALL_CD_DISPATCH_URL`. No URL configured = audited dry-run.
+
+3. **Slack thread Q&A** (`delivery/thread_qa.py`). A reply in the parent
+   thread ("show me the p99", "any errors at the spike?") triggers a scoped
+   investigation: same six tools, hard cap of 3 calls, narrowed to one
+   hypothesis. Reply posted back as Block Kit. The endpoint resolves the
+   parent's `report_id` from the embedded context block (no thread-ts → id
+   table needed).
+
+4. **`replay` command** (`agent/replay.py`). Re-runs the full pipeline on
+   any stored incident and emits a structured diff vs. the original report:
+   verdict ∈ {match, drift, regression, improvement}. Single id or batch via
+   `--batch-from`; CI uses `--fail-on-regression` to catch prompt / model
+   changes that quietly degrade a fault family.
+
+5. **Typed memory graph** (`learnings/incidents.py`). Every RCA report is
+   persisted to `data/incidents.sqlite` with three trust tiers (`local`,
+   `aggregated`, `verified`). A second table aggregates `(tenant, service)
+   → root_cause_class` counts so `get_past_incidents` returns both recent
+   incidents AND a per-service prior. Replay and calibration both read from
+   here.
+
+### CLI for the new surfaces
+
+```bash
+ai-oncall replay <report_id>                       # one incident, exit 1 on regression
+ai-oncall replay --batch-from runs/curated.txt     # CI form (one id per line)
+ai-oncall replay <report_id> --json --no-fail-on-regression  # snapshot for diffing
+```
+
+### Slack endpoints
+
+| Path | Purpose |
+|---|---|
+| `POST /webhooks/slack/action` | Block Kit interaction (button click). Signature-verified. |
+| `POST /webhooks/slack/event` | Events API: thread reply → scoped Q&A. URL handshake on first setup. |
+
+### Required env vars for the Slack surfaces
+
+```bash
+AI_ONCALL_SLACK_SIGNING_SECRET=...    # required for any Slack endpoint to accept traffic
+AI_ONCALL_CD_DISPATCH_URL=...         # optional; without this, rollback is a dry-run
+AI_ONCALL_CD_DISPATCH_SECRET=...      # required if CD_DISPATCH_URL is set (HMAC sign)
+```
+
+Startup logs a warning if `CD_DISPATCH_URL` is set without a secret, or if
+`SLACK_SIGNING_SECRET` is missing — the endpoints refuse traffic in either
+case rather than silently degrading.
 
 ## Eval
 
