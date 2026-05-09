@@ -23,10 +23,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-try:
-    import requests
-except ImportError:  # pragma: no cover — requests is a top-level dep
-    requests = None  # type: ignore[assignment]
+import httpx
 
 from ai_oncall.models import StagedAction
 from ai_oncall.settings import settings
@@ -69,24 +66,24 @@ def dispatch_rollback(
         )
         return False, "dry-run: AI_ONCALL_CD_DISPATCH_URL not configured"
 
-    if requests is None:
-        return False, "dry-run: requests library unavailable"
-
     secret = getattr(settings, "cd_dispatch_secret", "") or ""
-    headers = {"Content-Type": "application/json"}
-    if secret:
-        sig = hmac.new(secret.encode("utf-8"), body_bytes, hashlib.sha256).hexdigest()
-        headers["X-AI-Oncall-Signature"] = f"sha256={sig}"
+    if not secret:
+        # Refusing to send unsigned is intentional. settings.warn_unsafe_settings()
+        # logs this on startup so the operator sees it.
+        return False, "dry-run: AI_ONCALL_CD_DISPATCH_SECRET not set; refusing unsigned send"
+
+    headers = {
+        "Content-Type": "application/json",
+        "X-AI-Oncall-Signature": f"sha256={sign_dispatch_body(body_bytes, secret)}",
+    }
 
     try:
-        resp = requests.post(
-            target_url, data=body_bytes, headers=headers, timeout=timeout_seconds
-        )
-    except Exception as e:
+        resp = httpx.post(target_url, content=body_bytes, headers=headers, timeout=timeout_seconds)
+    except httpx.HTTPError as e:
         logger.exception("cd_dispatch_request_failed")
         return False, f"dispatch request failed: {e}"
 
-    if resp.status_code >= 200 and resp.status_code < 300:
+    if 200 <= resp.status_code < 300:
         return True, f"dispatched (status {resp.status_code})"
     return False, f"dispatch returned status {resp.status_code}: {resp.text[:200]}"
 

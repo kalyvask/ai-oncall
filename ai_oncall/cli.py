@@ -191,5 +191,66 @@ def replay(
         raise typer.Exit(1)
 
 
+@app.command()
+def feedback_export(
+    output_dir: Path = typer.Argument(
+        Path("evals/cases/feedback"),
+        help="Directory for one JSON case per negative reaction.",
+    ),
+    tenant_id: str | None = typer.Option(
+        None, "--tenant-id", help="Restrict to a single tenant's reactions."
+    ),
+    overwrite: bool = typer.Option(
+        False,
+        "--overwrite",
+        help="Re-emit cases that already exist at the destination.",
+    ),
+) -> None:
+    """Export 👎 / wrong-root-cause reactions as eval regression fixtures.
+
+    Each emitted case asserts the agent should NOT predict the same wrong
+    root cause again on the same alert. Pair with explicit ``expected.root_cause``
+    once a human supplies a correction.
+    """
+    configure()
+    from ai_oncall.learnings.feedback_loop import export_cases
+
+    cases = export_cases(output_dir, tenant_id=tenant_id, overwrite=overwrite)
+    typer.echo(f"wrote {len(cases)} fixture cases to {output_dir}")
+    for case in cases[:10]:
+        typer.echo(f"  - {case.case_id}: agent claimed `{case.payload['expected']['wrong_root_cause_service']}`")
+    if len(cases) > 10:
+        typer.echo(f"  ... and {len(cases) - 10} more")
+
+
+@app.command()
+def promote(
+    report_id: str = typer.Argument(..., help="Stored report id to promote."),
+    tier: str = typer.Option(
+        "verified",
+        "--tier",
+        help="New trust tier: aggregated (cross-tenant priors) or verified (human-confirmed).",
+    ),
+) -> None:
+    """Promote a stored incident to a higher trust tier.
+
+    Default tier is `verified` (human says "yes, this RCA was right"). Use
+    `--tier aggregated` to opt the incident into cross-tenant priors. Both
+    tiers must be requested explicitly by callers of `get_past_incidents`.
+    """
+    configure()
+    from ai_oncall.learnings.incidents import promote_incident_tier
+
+    if tier not in {"local", "aggregated", "verified"}:
+        raise typer.BadParameter(
+            f"--tier must be one of: local, aggregated, verified (got {tier!r})"
+        )
+    ok = promote_incident_tier(report_id, new_tier=tier)  # type: ignore[arg-type]
+    if not ok:
+        typer.echo(f"no incident with report_id={report_id}")
+        raise typer.Exit(1)
+    typer.echo(f"promoted {report_id} -> trust_tier={tier}")
+
+
 if __name__ == "__main__":
     app()

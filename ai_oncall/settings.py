@@ -43,6 +43,14 @@ class Settings(BaseSettings):
     # /webhooks/slack/action endpoint to verify inbound payloads.
     slack_signing_secret: str | None = None
 
+    # Slack outbound transport (delivery/send.py). Required to post the RCA
+    # back to a channel and to reply in threads. When unset, the post path
+    # raises SlackSendError so failures are loud.
+    slack_bot_token: str | None = None
+    # Default channel for posting RCA reports. Override per-tenant later if
+    # multiple workspaces are wired in.
+    slack_default_channel: str | None = None
+
     # Continuous-delivery dispatch endpoint (delivery/cd_dispatch.py). When
     # unset, the one-click rollback action records a dry-run audit and stops.
     # `cd_dispatch_secret` is the HMAC secret the receiver verifies with.
@@ -75,5 +83,11 @@ def warn_unsafe_settings() -> list[str]:
             "endpoints will reject every request because verify_slack_signature "
             "refuses to allow unsigned traffic. Set the secret to enable Slack "
             "buttons and thread Q&A."
+        )
+    if settings.slack_default_channel and not settings.slack_bot_token:
+        warnings.append(
+            "AI_ONCALL_SLACK_DEFAULT_CHANNEL is set but AI_ONCALL_SLACK_BOT_TOKEN "
+            "is not. The pipeline will skip posting RCAs to Slack silently — "
+            "set the bot token or remove the default channel."
         )
     return warnings

@@ -27,9 +27,13 @@ from ai_oncall.delivery.reactions import (
     parse_interaction_payload,
     verify_slack_signature,
 )
+from ai_oncall.delivery.send import (
+    SlackSendError,
+    post_thread_reply,
+)
 from ai_oncall.delivery.thread_qa import answer_thread_question, render_answer_blocks
 from ai_oncall.ingest.alerts import receive
-from ai_oncall.learnings.incidents import get_incident
+from ai_oncall.learnings.incidents import get_incident, lookup_report_id_by_thread
 from ai_oncall.llm.client import get_client as get_llm_client
 from ai_oncall.logging_setup import configure
 from ai_oncall.settings import settings
@@ -167,11 +171,18 @@ async def slack_event(request: Request) -> JSONResponse:
     if not question:
         return JSONResponse({"ok": True, "ignored": "empty text"})
 
-    # The parent message embeds report_id in metadata.event_payload.report_id.
-    # Slack sends the parent message id (`thread_ts`) but not its metadata,
-    # so we accept an explicit `report_id` field on the event for now and
-    # fall back to looking up the most recent report for the channel.
-    report_id = event.get("report_id") or _resolve_report_id_from_event(event)
+    # Resolution priority:
+    # 1. Persisted (channel, thread_ts) -> report_id mapping (delivery/send
+    #    populates this on every parent post; most reliable).
+    # 2. report_id embedded in the parent message context block (regex).
+    # 3. Explicit `report_id` field on the event payload (test/manual hook).
+    channel = event.get("channel") or ""
+    thread_ts = event.get("thread_ts") or ""
+    report_id: str | None = None
+    if channel and thread_ts:
+        report_id = lookup_report_id_by_thread(channel=channel, thread_ts=thread_ts)
+    if not report_id:
+        report_id = _resolve_report_id_from_event(event) or event.get("report_id")
     if not report_id:
         return JSONResponse(
             {"ok": False, "ignored": "could not resolve report_id from thread"}
@@ -186,11 +197,37 @@ async def slack_event(request: Request) -> JSONResponse:
     answer = answer_thread_question(
         report=report, question=question, store=store, llm=get_llm_client()
     )
+    blocks = render_answer_blocks(answer)
+
+    # Best-effort post back to the thread. Falls back to returning the blocks
+    # in the JSON response so a non-Slack client can still drive this endpoint.
+    posted_ts: str | None = None
+    if channel and thread_ts and settings.slack_bot_token:
+        try:
+            posted_ts = post_thread_reply(
+                channel=channel,
+                thread_ts=thread_ts,
+                blocks=blocks,
+                text=answer.summary[:140],
+            )
+        except SlackSendError as e:
+            # Don't 500 the request; surface the error in the response so the
+            # operator sees it but the user's question is not lost.
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "blocks": blocks,
+                    "thread_ts": thread_ts,
+                    "send_error": str(e),
+                }
+            )
+
     return JSONResponse(
         {
             "ok": True,
-            "blocks": render_answer_blocks(answer),
-            "thread_ts": event.get("thread_ts"),
+            "blocks": blocks,
+            "thread_ts": thread_ts,
+            "posted_ts": posted_ts,
         }
     )
 

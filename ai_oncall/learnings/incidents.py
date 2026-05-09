@@ -137,6 +137,22 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         """
     )
 
+    # Slack thread mapping: (channel, thread_ts) -> report_id. Populated by
+    # delivery/send.py on first post; read by the /webhooks/slack/event
+    # handler to attribute thread replies to the right RCA without having
+    # to parse the parent message.
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS slack_threads (
+            channel TEXT NOT NULL,
+            thread_ts TEXT NOT NULL,
+            report_id TEXT NOT NULL,
+            posted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (channel, thread_ts)
+        )
+        """
+    )
+
 
 def save_incident(
     report: RcaReport,
@@ -242,6 +258,80 @@ def list_incidents(
             params,
         )
         return [_row_to_model(r) for r in cursor.fetchall()]
+
+
+def record_thread_mapping(
+    *,
+    channel: str,
+    thread_ts: str,
+    report_id: str,
+    db_path: Path | None = None,
+) -> None:
+    """Persist (channel, thread_ts) -> report_id so later thread events
+    can recover the report. Idempotent on the primary key."""
+    with _conn(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT OR REPLACE INTO slack_threads (channel, thread_ts, report_id, posted_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (channel, thread_ts, report_id, datetime.utcnow().isoformat()),
+        )
+
+
+def lookup_report_id_by_thread(
+    *,
+    channel: str,
+    thread_ts: str,
+    db_path: Path | None = None,
+) -> Optional[str]:
+    """Reverse map for the Events API endpoint. Returns None when unknown."""
+    with _conn(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT report_id FROM slack_threads WHERE channel = ? AND thread_ts = ?",
+            (channel, thread_ts),
+        )
+        row = cursor.fetchone()
+        return row["report_id"] if row else None
+
+
+def promote_incident_tier(
+    report_id: str,
+    *,
+    new_tier: TrustTier,
+    db_path: Path | None = None,
+) -> bool:
+    """Promote a stored incident (and its graph row) to a higher trust tier.
+
+    Returns True if a row was updated; False if the report_id wasn't found.
+    The graph row tied to the incident's (tenant, service, root_cause_class)
+    is also bumped so cross-tenant queries see the promotion.
+    """
+    with _conn(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT tenant_id, service, root_cause_class FROM incidents WHERE report_id = ?",
+            (report_id,),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            return False
+        cursor.execute(
+            "UPDATE incidents SET trust_tier = ? WHERE report_id = ?",
+            (new_tier, report_id),
+        )
+        if row["root_cause_class"]:
+            cursor.execute(
+                """
+                UPDATE service_root_cause_classes
+                SET trust_tier = ?
+                WHERE tenant_id = ? AND service = ? AND root_cause_class = ?
+                """,
+                (new_tier, row["tenant_id"], row["service"], row["root_cause_class"]),
+            )
+    return True
 
 
 def list_root_cause_classes(

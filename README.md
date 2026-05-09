@@ -157,13 +157,15 @@ ai-oncall/
       prompts/                      versioned per-stage prompt files
     delivery/
       slack.py                      Block Kit formatter (pure)
+      send.py                       Slack chat.postMessage transport (httpx)
       reactions.py                  Slack signature verify + action dispatcher
       cd_dispatch.py                signed HMAC POST to a CD endpoint
       thread_qa.py                  bounded follow-up investigation in a thread
       html.py                       static HTML export, OKLCH stylesheet
     learnings/
       store.py                      stage 7 LEARN — append + LIKE retrieval
-      incidents.py                  full RCA persistence + typed memory graph
+      incidents.py                  full RCA persistence + typed memory graph + thread map
+      feedback_loop.py              👎 reactions -> eval regression fixtures
     storage/
       base.py                       TelemetryStore interface
       sqlite.py                     dev driver
@@ -217,11 +219,12 @@ after SYNTHESIZE).
 | 5a CORRELATE | `agent/correlation.py` | ✅ last-deploy diff per hypothesis (local + GitHub) |
 | 5b STAGE_ACTIONS | `agent/staging.py` | ✅ recommend / propose / auto tiers |
 | 5c CALIBRATE | `agent/calibration.py` | ✅ deterministic abstention (4 rules) |
-| 6 POST | `delivery/{slack,html}.py` | ✅ pure formatters + interactive Block Kit buttons on `propose` tier |
+| 6 POST | `delivery/{slack,html,send}.py` | ✅ pure formatters + interactive buttons + httpx Slack transport |
 | 6a SLACK ACTIONS | `delivery/reactions.py` + `cd_dispatch.py` | ✅ signed handler, HMAC-signed CD dispatch |
-| 6b SLACK THREAD Q&A | `delivery/thread_qa.py` | ✅ bounded follow-up loop (≤3 tool calls) |
-| 7 LEARN | `learnings/{store,incidents}.py` | ✅ append + LIKE retrieval + full RCA persistence + typed memory graph |
+| 6b SLACK THREAD Q&A | `delivery/thread_qa.py` | ✅ bounded follow-up loop (≤3 tool calls), reply auto-posted |
+| 7 LEARN | `learnings/{store,incidents,feedback_loop}.py` | ✅ append + retrieval + RCA persistence + typed memory graph + 👎 → eval fixture |
 | REPLAY | `agent/replay.py` + `ai-oncall replay <id>` | ✅ re-runs pipeline on stored incident, diffs vs original |
+| PROMOTE | `ai-oncall promote <id> --tier verified` | ✅ moves an incident across `local` / `aggregated` / `verified` tiers |
 
 ## The 6 tools the LLM gets (BRIEF.md §6)
 
@@ -291,17 +294,97 @@ ai-oncall replay <report_id> --json --no-fail-on-regression  # snapshot for diff
 | `POST /webhooks/slack/action` | Block Kit interaction (button click). Signature-verified. |
 | `POST /webhooks/slack/event` | Events API: thread reply → scoped Q&A. URL handshake on first setup. |
 
+### Slack outbound transport
+
+`delivery/send.py` posts the RCA back to Slack. Two surfaces:
+
+- `post_rca(report, channel)` posts the parent (Block Kit) plus the
+  alternatives reply in the same thread, and persists the
+  `(channel, thread_ts) -> report_id` mapping so future thread events can
+  attribute replies to the right report.
+- `post_thread_reply(channel, thread_ts, blocks)` posts a block list as a
+  threaded reply. Used by the thread Q&A endpoint after computing an answer.
+
+When `AI_ONCALL_SLACK_BOT_TOKEN` and `AI_ONCALL_SLACK_DEFAULT_CHANNEL` are
+set, `run_rca` posts the RCA automatically at the end of stage 6. Without
+the bot token, the pipeline runs unchanged and the renderers stay pure.
+
+### Negative-feedback eval loop
+
+`learnings/feedback_loop.py` reads 👎 / wrong-root-cause reactions from
+`learnings.jsonl`, looks each one up in the persisted incidents, and
+emits one regression-test fixture per mistake. Pair with explicit
+`expected.root_cause` once a human supplies the correction:
+
+```bash
+ai-oncall feedback-export evals/cases/feedback   # one JSON per negative reaction
+ai-oncall feedback-export evals/cases/feedback --tenant-id customer_a
+ai-oncall feedback-export evals/cases/feedback --overwrite  # refresh existing
+```
+
+### Trust tier promotion
+
+The typed memory graph stores `(tenant, service, root_cause_class)` rows
+under one of three trust tiers:
+
+- `local` — default. Only this tenant's prior incidents.
+- `aggregated` — opted into cross-tenant priors (must be requested
+  explicitly by callers of `get_past_incidents`).
+- `verified` — a human marked the RCA right; a corroborating signal for
+  cross-tenant priors.
+
+Promote a stored incident:
+
+```bash
+ai-oncall promote <report_id> --tier verified
+ai-oncall promote <report_id> --tier aggregated
+```
+
+`get_past_incidents` accepts `trust_tiers=("local",)` (default) or
+`("local","verified")` to widen.
+
 ### Required env vars for the Slack surfaces
 
 ```bash
 AI_ONCALL_SLACK_SIGNING_SECRET=...    # required for any Slack endpoint to accept traffic
+AI_ONCALL_SLACK_BOT_TOKEN=...         # xoxb-… token; required to post the RCA + replies
+AI_ONCALL_SLACK_DEFAULT_CHANNEL=...   # e.g. C123…; channel post_rca writes to
 AI_ONCALL_CD_DISPATCH_URL=...         # optional; without this, rollback is a dry-run
 AI_ONCALL_CD_DISPATCH_SECRET=...      # required if CD_DISPATCH_URL is set (HMAC sign)
 ```
 
-Startup logs a warning if `CD_DISPATCH_URL` is set without a secret, or if
-`SLACK_SIGNING_SECRET` is missing — the endpoints refuse traffic in either
-case rather than silently degrading.
+Startup logs a warning when:
+- `CD_DISPATCH_URL` is set without `CD_DISPATCH_SECRET` (refuses to dispatch unsigned),
+- `SLACK_SIGNING_SECRET` is missing (interaction endpoints reject all traffic),
+- `SLACK_DEFAULT_CHANNEL` is set without `SLACK_BOT_TOKEN` (post would silently skip).
+
+## Deploy
+
+The default deploy target is "single VM, single process." For the Slack
+surfaces to work, the FastAPI server must be reachable from Slack's
+servers — a managed PaaS (Fly.io, Railway, Render) is enough for v1.
+
+```bash
+# 1. Create the .env from the template and fill in keys (see "Personalize" §).
+# 2. Build the Next.js UI once for prod.
+cd web && npm install && npm run build && cd ..
+
+# 3. Run the FastAPI server (it serves the static UI bundle at /web).
+uvicorn ai_oncall.server:app --host 0.0.0.0 --port 8000
+
+# 4. Point Slack at the public URL:
+#    - Slash command / interactivity request URL: https://<host>/webhooks/slack/action
+#    - Events API request URL:                    https://<host>/webhooks/slack/event
+#    - Subscribe to event:                         message.channels
+# 5. Point your CD system at:
+#    - Rollback receiver URL: settings.cd_dispatch_url
+#    - Verify the X-AI-Oncall-Signature header before acting.
+```
+
+The DuckDB / SQLite stores live in `data/` next to the process. Mount a
+volume there in the deploy target so state survives container restarts.
+Snowflake driver kicks in via `AI_ONCALL_TELEMETRY_STORE=snowflake` for
+multi-tenant prod once a customer has telemetry there.
 
 ## Eval
 

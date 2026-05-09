@@ -73,7 +73,28 @@ def run_rca(alert: Alert, store: TelemetryStore, llm: LlmClient) -> RcaReport:
     except Exception:  # pragma: no cover — defensive
         logger.exception("save_incident_failed", extra={"report_id": report.report_id})
 
+    # Stage 6 POST: optionally publish to Slack. Configured tenants get the
+    # RCA in their channel; the rest just see the API response. Never let a
+    # Slack outage break the live pipeline.
+    _maybe_post_to_slack(report)
+
     return report
+
+
+def _maybe_post_to_slack(report: RcaReport) -> None:
+    if not (settings.slack_bot_token and settings.slack_default_channel):
+        return
+    try:
+        from ai_oncall.delivery.send import SlackSendError, post_rca
+    except ImportError:  # pragma: no cover
+        return
+    try:
+        post_rca(report, settings.slack_default_channel)
+    except SlackSendError as e:
+        logger.warning(
+            "slack_post_failed",
+            extra={"report_id": report.report_id, "error": str(e)[:200]},
+        )
 
 
 def _apply_calibration(
