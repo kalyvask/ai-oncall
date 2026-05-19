@@ -140,6 +140,30 @@ def test_approve_rollback_records_outcome_when_dry_run(tmp_dbs) -> None:
     assert "dry-run" in o.detail.lower()
 
 
+def test_approve_rollback_writes_audit_row(tmp_dbs) -> None:
+    """Every approve_rollback handling must persist an audit row to
+    learnings.jsonl with kind=slack_action. Silent audit failures defeat
+    the entire purpose of an audit log."""
+    report = _propose_report(tmp_dbs)
+    payload = {
+        "user": {"id": "U7", "name": "auditor"},
+        "actions": [{"action_id": "approve_rollback", "value": report.report_id}],
+    }
+    handle_interaction(payload, cd_dispatch_url=None)
+
+    learnings_path = learnings_store.LEARNINGS_PATH
+    assert learnings_path.exists(), "audit log was never written"
+    lines = [line for line in learnings_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    audit_rows = [json.loads(line) for line in lines if '"kind": "slack_action"' in line or '"kind":"slack_action"' in line]
+    assert audit_rows, "no slack_action audit row found"
+    row = audit_rows[-1]
+    assert row["action_id"] == "approve_rollback"
+    assert row["report_id"] == report.report_id
+    assert row["user_id"] == "U7"
+    assert row["user_name"] == "auditor"
+    assert "at" in row
+
+
 def test_approve_rollback_refuses_when_action_tier_is_recommend(tmp_dbs) -> None:
     """The button only fires for `propose` (one-click). `recommend` should
     refuse."""

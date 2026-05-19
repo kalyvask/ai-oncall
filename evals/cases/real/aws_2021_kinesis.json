@@ -1,0 +1,30 @@
+{
+  "case_id": "aws_2021_kinesis",
+  "family": "saturation",
+  "difficulty": "medium",
+  "source_url": "https://aws.amazon.com/message/12721/",
+  "alert": {
+    "alert_id": "aws_2020_11_25_kinesis",
+    "tenant_id": "demo",
+    "fired_at": "2020-11-25T10:15:00Z",
+    "source": "manual",
+    "severity": "page",
+    "service": "kinesis-frontend",
+    "title": "Kinesis frontend p99 latency 8s, threshold 1s, sustained 10 min",
+    "description": "Customer reports of 5xx from many us-east-1 services. Cognito, CloudWatch, Lambda alarms affected. Frontend thread pool appears exhausted.",
+    "signal": {
+      "kind": "metric_threshold",
+      "metric": "http.server.duration",
+      "agg": "p99",
+      "value_ms": 8000,
+      "threshold_ms": 1000,
+      "window_minutes": 10
+    },
+    "labels": {"env": "prod", "region": "us-east-1"}
+  },
+  "expected": {
+    "top_root_cause_service": "kinesis-frontend",
+    "root_cause_class": "saturation",
+    "notes": "OS thread limit per frontend host reached after a capacity expansion increased fan-out to backend cells beyond what the threading model could handle."
+  }
+}

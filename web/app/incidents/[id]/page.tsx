@@ -1,140 +1,138 @@
 // Incident detail.
-//   Dominant element (squint test) is the top-hypothesis block — anchored
-//   by hairline rules above and below, NO side-stripe border (banned).
-//   The ACTION LAYER preview lives directly under the hypothesis: a single
-//   prepared remediation, classified by blast radius, with an Approve button
-//   and an Escalate / Skip pair. Mirrors the Action Staging pattern from
-//   the observability primer (low/medium/high blast radius, per-class
-//   approval threshold). Wire-up to a real executor is the next layer.
+// Pulls /incidents/{id} from the FastAPI backend at render time. Maps the
+// RcaReport shape into the existing UI: hairline-anchored top hypothesis,
+// action layer with blast-radius pill and approval flow, tabbed
+// trace/topology/runbook/alternatives panel.
 
 import { Pill } from "@/components/Pill";
 import { Statline } from "@/components/Statline";
+import { IncidentActions } from "@/components/IncidentActions";
+import { api, type Hypothesis, type IncidentDetail, type StagedAction, type ToolCall } from "@/lib/api";
+import { CATALOG_RATES } from "@/lib/cost";
 
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string }> };
 
 const TABS = ["trace", "topology", "runbook", "alternatives"] as const;
 
-const REPORT = {
-  alert: {
-    title: "checkout p99 latency 2.18s, threshold 1.5s, for 5 min",
-    service: "checkout",
-    severity: "page" as const,
-    fired_at: "2026-04-25T03:14:22Z",
-  },
-  model: { id: "claude-haiku-4-5-20251001" },
-  investigation: {
-    tokens_in: 4812,
-    tokens_out: 612,
-    cost_usd: 0.018,
-    tool_calls: [
-      { tool: "get_topology", input: { service: "checkout", depth: 2 }, summary: "checkout depends on cart, payment, currency, shipping. payment is in ERROR.", duration_ms: 12 },
-      { tool: "get_recent_deploys", input: { service: "payment", since: "2026-04-24T03:14:00Z" }, summary: "1 PR merged 18 min before alert: 'bump stripe SDK 7 to 8'", duration_ms: 184 },
-      { tool: "query_logs", input: { service: "payment", regex: "TypeError|charges.create" }, summary: "21 ERROR lines: TypeError on charges.create signature mismatch", duration_ms: 96 },
-      { tool: "query_metrics", input: { service: "payment", metric: "http.server.error_rate", agg: "rate" }, summary: "error rate 0% baseline, jumped to 87% at 02:56:11Z", duration_ms: 71 },
-    ],
-  },
-  top: {
-    root_cause_service: "payment",
-    confidence: 0.92,
-    reasoning:
-      "The payment service began returning errors at 02:56:11Z, 18 minutes before the checkout p99 alert. A PR merged at 02:55:42Z (commit abc1234) bumped the Stripe SDK from v7 to v8; the v8 client.charges.create signature changed. payment logs show 21 TypeError lines matching the new signature.",
-    evidence: [
-      { claim: "payment is the only ERROR-state node downstream of checkout", source: "tool_calls[0]" },
-      { claim: "PR landed on payment 18 min before the alert", source: "tool_calls[1]" },
-      { claim: "21 TypeError lines on charges.create in the window", source: "tool_calls[2]" },
-      { claim: "payment error rate jumped 0% to 87% at 02:56:11Z", source: "tool_calls[3]" },
-    ],
-    runbook_link: "runbooks/payment.md",
-  },
-  // --- structured Action Staging envelope (the layer the user asked about) ---
-  action: {
-    blast_radius: "medium" as const,
-    executor: "github + ci",
-    command: "git revert abc1234 && deploy payment",
+const BLAST_TONE = { low: "pos", medium: "warn", high: "neg" } as const;
+
+function estimateCost(modelId: string | undefined, tokensIn: number, tokensOut: number): number {
+  if (!modelId) return 0;
+  const rates = CATALOG_RATES[modelId];
+  if (!rates) return 0;
+  return (tokensIn * rates.in + tokensOut * rates.out) / 1_000_000;
+}
+
+function blastRadiusFor(action: StagedAction | null | undefined): "low" | "medium" | "high" {
+  if (!action) return "medium";
+  if (action.blast_radius) return action.blast_radius;
+  if (action.tier === "auto") return "low";
+  if (action.tier === "recommend") return "high";
+  return "medium";
+}
+
+function deriveActionLayer(top: Hypothesis | undefined) {
+  const sa = top?.staged_action ?? null;
+  return {
+    blast_radius: blastRadiusFor(sa),
+    executor: sa?.tier === "auto" ? "auto-runner" : "approval queue",
+    command: sa?.command ?? top?.recommended_action ?? "No staged action.",
     estimated_seconds: 90,
     rollback_seconds: 60,
-    approval_threshold: 0.90,
-    approvers_required: 1,
-  },
-  alternatives: [
-    {
-      root_cause_service: "checkout",
-      confidence: 0.18,
-      reasoning: "checkout is the alerting service but its code is unchanged; latency is a downstream symptom of payment retries.",
-      action: "Do not roll back checkout. payment is the cause.",
-    },
-    {
-      root_cause_service: "stripe",
-      confidence: 0.05,
-      reasoning: "External Stripe outage could in theory cause this, but the TypeError signature is client-side, not 5xx.",
-      action: "Check status.stripe.com only if rollback does not resolve.",
-    },
-  ],
-};
-
-const BLAST_TONE = { low: "pos", medium: "warn", high: "neg" } as const;
+    approval_threshold: sa?.approval_threshold ?? 0.85,
+    approvers_required: sa?.tier === "auto" ? 0 : 1,
+    tier: sa?.tier ?? "recommend",
+  };
+}
 
 export default async function IncidentDetail({ params, searchParams }: Props) {
   const { id } = await params;
   const { tab: rawTab } = await searchParams;
   const tab = (TABS as readonly string[]).includes(rawTab || "") ? rawTab! : "trace";
-  const a = REPORT.action;
-  const meetsThreshold = REPORT.top.confidence >= a.approval_threshold;
+
+  let incident: IncidentDetail | null = null;
+  let fetchError: string | null = null;
+  try {
+    incident = await api.incident(id);
+  } catch (e) {
+    fetchError = e instanceof Error ? e.message : String(e);
+  }
+
+  if (fetchError || !incident) {
+    return (
+      <div className="flex flex-col gap-6">
+        <h1 className="text-2xl font-medium text-ink-0">Incident not found</h1>
+        <p className="max-w-prose text-sm text-rose-400">{fetchError ?? "Unknown error."}</p>
+      </div>
+    );
+  }
+
+  const top: Hypothesis | undefined = incident.hypotheses[0];
+  const alternatives = incident.hypotheses.slice(1);
+  const a = deriveActionLayer(top);
+  const meetsThreshold = (top?.confidence ?? 0) >= a.approval_threshold && a.tier === "propose";
+
+  const tool_calls: ToolCall[] = incident.investigation?.tool_calls ?? [];
+  const tokens_in = incident.investigation?.tokens_in ?? 0;
+  const tokens_out = incident.investigation?.tokens_out ?? 0;
+  const cost = estimateCost(incident.model?.id, tokens_in, tokens_out);
+  const modelLabel = incident.model?.id?.split("-").slice(0, 3).join("-") ?? "unknown";
 
   return (
     <div className="flex flex-col gap-12">
-      {/* HEADER — left-anchored, asymmetric, no center alignment. */}
       <header className="flex flex-col gap-4">
         <div className="flex items-center gap-3">
-          <Pill tone="neg">{REPORT.alert.severity}</Pill>
+          <Pill tone={incident.alert.severity === "page" ? "neg" : incident.alert.severity === "warn" ? "warn" : "neutral"}>
+            {incident.alert.severity}
+          </Pill>
           <span className="eyebrow">incident · {id.slice(0, 8)}</span>
         </div>
         <h1 className="max-w-prose text-2xl font-medium tracking-tight text-ink-0">
-          {REPORT.alert.title}
+          {incident.alert.title}
         </h1>
         <p className="text-sm text-ink-3">
-          <code className="text-ink-2">{REPORT.alert.service}</code>
+          <code className="text-ink-2">{incident.alert.service}</code>
           <span className="mx-2">·</span>
-          <time>{REPORT.alert.fired_at}</time>
+          <time>{incident.alert.fired_at}</time>
         </p>
       </header>
 
-      {/* DOMINANT ELEMENT — top hypothesis. No card; hairline rules + scale. */}
       <section className="border-y border-ink-7 py-8">
         <div className="grid grid-cols-1 gap-8 md:grid-cols-[1fr_auto]">
           <div className="flex flex-col gap-5">
             <p className="eyebrow">Top hypothesis</p>
-            <h2 className="font-mono text-2xl text-ink-0">{REPORT.top.root_cause_service}</h2>
-            <p className="max-w-prose text-base text-ink-1">{REPORT.top.reasoning}</p>
-            <ul className="flex flex-col gap-2 text-sm text-ink-2">
-              {REPORT.top.evidence.map((e, i) => (
-                <li key={i} className="flex gap-3">
-                  <span className="font-mono text-xs tabular-nums text-ink-4">{(i + 1).toString().padStart(2, "0")}</span>
-                  <span className="flex-1">{e.claim}</span>
-                  <code className="text-xs text-ink-4">{e.source}</code>
-                </li>
-              ))}
-            </ul>
+            <h2 className="font-mono text-2xl text-ink-0">{top?.root_cause_service ?? "—"}</h2>
+            <p className="max-w-prose text-base text-ink-1">{top?.reasoning ?? top?.statement ?? ""}</p>
+            {top?.evidence && top.evidence.length > 0 && (
+              <ul className="flex flex-col gap-2 text-sm text-ink-2">
+                {top.evidence.map((e, i) => (
+                  <li key={i} className="flex gap-3">
+                    <span className="font-mono text-xs tabular-nums text-ink-4">
+                      {(i + 1).toString().padStart(2, "0")}
+                    </span>
+                    <span className="flex-1">{e.claim}</span>
+                    <code className="text-xs text-ink-4">{e.source}</code>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           <div className="flex flex-col items-start gap-1 md:items-end">
             <p className="eyebrow">Confidence</p>
             <p className="font-mono text-3xl font-normal tabular-nums text-acc">
-              {Math.round(REPORT.top.confidence * 100)}%
+              {Math.round((top?.confidence ?? 0) * 100)}%
             </p>
-            <p className="text-xs text-ink-3">model {REPORT.model.id.split("-").slice(0, 3).join("-")}</p>
+            <p className="text-xs text-ink-3">model {modelLabel}</p>
           </div>
         </div>
       </section>
 
-      {/* ACTION LAYER — the structured remediation envelope.
-          Blast radius classification, threshold-gated approval button,
-          executor binding. Wire-up is stubbed pending the BRIEF.md §13
-          decisions (name, model, cost ceiling). */}
       <section aria-labelledby="action-heading" className="flex flex-col gap-5">
         <div className="flex items-baseline justify-between">
           <div className="flex items-center gap-3">
             <h2 id="action-heading" className="text-lg font-medium text-ink-0">Prepared action</h2>
             <Pill tone={BLAST_TONE[a.blast_radius]}>{a.blast_radius} blast radius</Pill>
+            <Pill tone="neutral">tier: {a.tier}</Pill>
           </div>
           <span className="eyebrow">via {a.executor}</span>
         </div>
@@ -143,27 +141,11 @@ export default async function IncidentDetail({ params, searchParams }: Props) {
           <pre className="overflow-x-auto rounded-md bg-ink-9 px-4 py-3 font-mono text-sm text-ink-1 ring-1 ring-ink-7">
             {a.command}
           </pre>
-          <div className="flex items-stretch gap-2">
-            <button
-              type="button"
-              disabled={!meetsThreshold}
-              className="rounded-md bg-acc px-5 py-2 text-sm font-semibold text-ink-9 transition-colors duration-fast hover:bg-acc-hi disabled:cursor-not-allowed disabled:bg-ink-7 disabled:text-ink-4"
-            >
-              {meetsThreshold ? "Approve and run" : "Below threshold"}
-            </button>
-            <button
-              type="button"
-              className="rounded-md border border-ink-7 px-4 py-2 text-sm text-ink-1 transition-colors duration-fast hover:border-ink-5 hover:bg-ink-8"
-            >
-              Escalate
-            </button>
-            <button
-              type="button"
-              className="rounded-md border border-ink-7 px-4 py-2 text-sm text-ink-3 transition-colors duration-fast hover:border-ink-5 hover:bg-ink-8"
-            >
-              Skip
-            </button>
-          </div>
+          <IncidentActions
+            reportId={incident.report_id}
+            approveEnabled={meetsThreshold}
+            approveLabel={meetsThreshold ? "Approve and run" : a.tier === "recommend" ? "Recommend only" : "Below threshold"}
+          />
         </div>
 
         <dl className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm sm:grid-cols-4">
@@ -186,23 +168,23 @@ export default async function IncidentDetail({ params, searchParams }: Props) {
         </dl>
 
         <p className="max-w-prose text-xs text-ink-4">
-          Action Staging is human-in-the-loop. Approval routes execution to {a.executor}; rollback is automatic on failure. Auto-execute is opt-in per blast-radius class.
+          Action Staging is human-in-the-loop. Tier <code>recommend</code> is read-only;
+          <code>propose</code> shows the Approve button when confidence ≥ threshold;
+          <code>auto</code> requires no approval and executes via the auto-runner.
         </p>
       </section>
 
-      {/* STATLINE CLUSTER — quiet metadata strip. */}
       <section className="grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-4">
-        <Statline label="Time to RCA" value="26s" />
+        <Statline label="Generated" value={new Date(incident.generated_at).toLocaleTimeString()} />
         <Statline
           label="Tokens"
-          value={(REPORT.investigation.tokens_in + REPORT.investigation.tokens_out).toLocaleString()}
-          delta={`in ${REPORT.investigation.tokens_in} / out ${REPORT.investigation.tokens_out}`}
+          value={(tokens_in + tokens_out).toLocaleString()}
+          delta={`in ${tokens_in} / out ${tokens_out}`}
         />
-        <Statline label="Cost" value={`$${REPORT.investigation.cost_usd.toFixed(3)}`} />
-        <Statline label="Tool calls" value={String(REPORT.investigation.tool_calls.length)} />
+        <Statline label="Cost" value={cost > 0 ? `$${cost.toFixed(4)}` : "—"} />
+        <Statline label="Tool calls" value={String(tool_calls.length)} />
       </section>
 
-      {/* TABS — URL-driven. Underline-on-active, no chip pills. */}
       <section>
         <nav role="tablist" className="flex gap-6 border-b border-ink-7">
           {TABS.map((t) => {
@@ -228,7 +210,7 @@ export default async function IncidentDetail({ params, searchParams }: Props) {
         <div className="pt-6">
           {tab === "trace" && (
             <ol className="flex flex-col" role="list">
-              {REPORT.investigation.tool_calls.map((c, i) => (
+              {tool_calls.map((c, i) => (
                 <li
                   key={i}
                   className="grid grid-cols-[auto_auto_1fr_auto] items-baseline gap-5 border-t border-ink-7 py-3 first:border-t-0"
@@ -237,43 +219,57 @@ export default async function IncidentDetail({ params, searchParams }: Props) {
                     {(i + 1).toString().padStart(2, "0")}
                   </span>
                   <code className="text-sm text-acc-hi">{c.tool}</code>
-                  <p className="text-sm text-ink-2">{c.summary}</p>
+                  <p className="text-sm text-ink-2">{c.result_summary}</p>
                   <span className="font-mono text-xs tabular-nums text-ink-3">
-                    {c.duration_ms.toFixed(0)}ms
+                    {Math.round(c.duration_ms)}ms
                   </span>
                 </li>
               ))}
+              {tool_calls.length === 0 && (
+                <li className="text-sm text-ink-3">No tool calls recorded for this incident.</li>
+              )}
             </ol>
           )}
 
           {tab === "topology" && (
             <p className="max-w-prose text-sm text-ink-2">
-              Topology view lives at <a className="text-acc-hi underline-offset-2 hover:underline" href="/topology">/topology</a>.
-              The relevant subgraph for this incident: <code>checkout to cart, payment, currency, shipping</code>; only payment is in ERROR.
+              Topology view lives at{" "}
+              <a className="text-acc-hi underline-offset-2 hover:underline" href="/topology">
+                /topology
+              </a>
+              . The graph is rebuilt from observed OTel spans (10-minute window),
+              falling back to <code>topology.yaml</code>.
             </p>
           )}
 
           {tab === "runbook" && (
             <p className="max-w-prose text-sm text-ink-2">
-              Linked runbook: <code className="text-acc-hi">{REPORT.top.runbook_link}</code>.
-              Full runbooks at <a className="text-acc-hi underline-offset-2 hover:underline" href="/runbooks">/runbooks</a>.
+              Linked runbook: <code className="text-acc-hi">runbooks/{top?.root_cause_service ?? "unknown"}.md</code>.
+              Full runbooks at{" "}
+              <a className="text-acc-hi underline-offset-2 hover:underline" href="/runbooks">
+                /runbooks
+              </a>
+              .
             </p>
           )}
 
           {tab === "alternatives" && (
             <ul className="flex flex-col" role="list">
-              {REPORT.alternatives.map((a, i) => (
+              {alternatives.map((h, i) => (
                 <li key={i} className="grid grid-cols-[auto_1fr_auto] items-baseline gap-5 border-t border-ink-7 py-4 first:border-t-0">
-                  <code className="text-sm text-ink-1">{a.root_cause_service}</code>
+                  <code className="text-sm text-ink-1">{h.root_cause_service}</code>
                   <div>
-                    <p className="text-sm text-ink-2">{a.reasoning}</p>
-                    <p className="mt-1 text-xs text-ink-4">{a.action}</p>
+                    <p className="text-sm text-ink-2">{h.reasoning ?? h.statement}</p>
+                    {h.recommended_action && <p className="mt-1 text-xs text-ink-4">{h.recommended_action}</p>}
                   </div>
                   <span className="font-mono text-sm tabular-nums text-ink-3">
-                    {Math.round(a.confidence * 100)}%
+                    {Math.round(h.confidence * 100)}%
                   </span>
                 </li>
               ))}
+              {alternatives.length === 0 && (
+                <li className="text-sm text-ink-3">No alternative hypotheses.</li>
+              )}
             </ul>
           )}
         </div>

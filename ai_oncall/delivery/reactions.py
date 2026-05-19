@@ -320,7 +320,7 @@ def _audit_action(
 ) -> None:
     """Append an audit row to learnings.jsonl. Best-effort."""
     try:
-        LEARNINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        learnings_store.LEARNINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
         row = {
             "kind": "slack_action",
             "report_id": report_id,
@@ -331,9 +331,9 @@ def _audit_action(
             "detail": detail,
             "at": datetime.now(timezone.utc).isoformat(),
         }
-        with LEARNINGS_PATH.open("a", encoding="utf-8") as f:
+        with learnings_store.LEARNINGS_PATH.open("a", encoding="utf-8") as f:
             f.write(json.dumps(row) + "\n")
-    except Exception:  # pragma: no cover
+    except Exception:
         logger.exception("audit_action_failed")
 
 

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import re
 
+from ai_oncall.agent.policy import DEFAULT_POLICY, ActionPolicy, downgrade_unsafe_tier
 from ai_oncall.models import (
     ActionKind,
     ActionTier,
@@ -32,21 +33,32 @@ from ai_oncall.models import (
 
 PROPOSE_THRESHOLD = 0.50
 AUTO_THRESHOLD = 0.85
-AUTO_KIND_WHITELIST: set[ActionKind] = {"rollback"}
 
 
-def stage_actions(report: RcaReport) -> RcaReport:
+def stage_actions(report: RcaReport, *, policy: ActionPolicy = DEFAULT_POLICY) -> RcaReport:
     is_page = report.alert.severity == "page"
     for hypothesis in report.hypotheses:
         if hypothesis.staged_action is not None:
-            continue  # the LLM already returned one; respect it
+            # The LLM already returned one. Still policy-check the tier: an
+            # LLM-supplied tier outside the allowlist must be downgraded.
+            sa = hypothesis.staged_action
+            new_tier, reason = downgrade_unsafe_tier(sa.kind, sa.tier, policy=policy)
+            if new_tier != sa.tier:
+                hypothesis.staged_action = sa.model_copy(
+                    update={
+                        "tier": new_tier,
+                        "rationale": (sa.rationale or "") + f" Policy override: {reason}",
+                    }
+                )
+            continue
         kind = _infer_kind(hypothesis.recommended_action)
-        tier = _classify_tier(kind, hypothesis.confidence, is_page=is_page)
+        tier = _classify_tier(kind, hypothesis.confidence, is_page=is_page, policy=policy)
+        rationale = _rationale(kind, tier, hypothesis)
         hypothesis.staged_action = StagedAction(
             kind=kind,
             service=hypothesis.root_cause_service,
             tier=tier,
-            rationale=_rationale(kind, tier, hypothesis),
+            rationale=rationale,
             runbook_ref=hypothesis.runbook_link,
         )
     return report
@@ -73,15 +85,19 @@ def _infer_kind(recommended_action: str) -> ActionKind:
 
 
 def _classify_tier(
-    kind: ActionKind, confidence: float, *, is_page: bool
+    kind: ActionKind,
+    confidence: float,
+    *,
+    is_page: bool,
+    policy: ActionPolicy = DEFAULT_POLICY,
 ) -> ActionTier:
     if (
         is_page
         and confidence >= AUTO_THRESHOLD
-        and kind in AUTO_KIND_WHITELIST
+        and policy.can_auto(kind)
     ):
         return "auto"
-    if confidence >= PROPOSE_THRESHOLD:
+    if confidence >= PROPOSE_THRESHOLD and policy.can_propose(kind):
         return "propose"
     return "recommend"
 

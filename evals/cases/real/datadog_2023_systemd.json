@@ -1,0 +1,30 @@
+{
+  "case_id": "datadog_2023_systemd",
+  "family": "config_drift",
+  "difficulty": "hard",
+  "source_url": "https://www.datadoghq.com/blog/2023-03-08-multiregion-infrastructure-connectivity-issue/",
+  "alert": {
+    "alert_id": "ddog_2023_03_08_001",
+    "tenant_id": "demo",
+    "fired_at": "2023-03-08T06:00:00Z",
+    "source": "manual",
+    "severity": "page",
+    "service": "monitoring-agent",
+    "title": "Tens of thousands of nodes lost network connectivity simultaneously",
+    "description": "Hosts across multiple regions stopped reporting concurrently. systemd-networkd service appears unreachable on impacted nodes.",
+    "signal": {
+      "kind": "metric_threshold",
+      "metric": "agent.reporting_rate",
+      "agg": "rate",
+      "value_ms": 1,
+      "threshold_ms": 95,
+      "window_minutes": 5
+    },
+    "labels": {"env": "prod", "region": "multi"}
+  },
+  "expected": {
+    "top_root_cause_service": "systemd-networkd",
+    "root_cause_class": "config_drift",
+    "notes": "Auto-applied OS security update upgraded systemd-networkd, which removed routes/unit files on hosts and disabled network connectivity at boot time."
+  }
+}

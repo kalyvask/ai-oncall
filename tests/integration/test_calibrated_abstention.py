@@ -30,6 +30,59 @@ def _report() -> RcaReport:
     return RcaReport.model_validate(payload)
 
 
+def test_calibration_surfaces_as_structured_record_on_report() -> None:
+    """When a rule fires, report.calibration carries the structured codes
+    and descriptions so the API + UI can render abstention without parsing
+    the escalation reason string. Eval can grade per-rule precision/recall
+    against report.calibration.reasons[].code."""
+    report = _report()
+    # Force a confidence_floor hit.
+    h = report.hypotheses[0].model_copy(update={"confidence": 0.20})
+    report = report.model_copy(update={"hypotheses": [h, *report.hypotheses[1:]]})
+    new, result = calibrate(report, recent_deploys=[], past_incidents=[], tool_calls_used=1)
+    assert result.abstain is True
+    assert new.calibration is not None
+    assert new.calibration.abstain is True
+    codes = {r.code for r in new.calibration.reasons}
+    assert "confidence_floor" in codes
+    # Every reason has a non-empty description (UI contract).
+    assert all(r.description for r in new.calibration.reasons)
+
+
+def test_calibration_records_accepted_when_no_rules_fire() -> None:
+    """The non-abstain path also attaches a calibration record so the
+    consumer can distinguish 'calibration ran, accepted' from 'calibration
+    skipped'."""
+    report = _report()
+    h = report.hypotheses[0].model_copy(update={"confidence": 0.85})
+    report = report.model_copy(update={"hypotheses": [h, *report.hypotheses[1:]]})
+    recent_deploys = [
+        {"service": h.root_cause_service, "timestamp": datetime.now(timezone.utc).isoformat()}
+    ]
+    new, result = calibrate(
+        report,
+        recent_deploys=recent_deploys,
+        past_incidents=[{"root_cause_service": h.root_cause_service, "root_cause_class": "deploy_regression"}],
+        tool_calls_used=4,
+    )
+    assert result.abstain is False
+    assert new.calibration is not None
+    assert new.calibration.abstain is False
+    assert new.calibration.reasons == []
+
+
+def test_evidence_requires_non_empty_source() -> None:
+    """Citation contract: every evidence claim must reference something."""
+    from pydantic import ValidationError
+    from ai_oncall.models import EvidenceItem
+    import pytest
+
+    with pytest.raises(ValidationError):
+        EvidenceItem(claim="payment is broken", source="")
+    with pytest.raises(ValidationError):
+        EvidenceItem(claim="", source="tool_calls[0]")
+
+
 def test_no_rules_fire_when_signals_are_strong() -> None:
     report = _report()
     # Bump top confidence well above the floor so no rule fires.

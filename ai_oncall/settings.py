@@ -21,8 +21,28 @@ class Settings(BaseSettings):
     llm_provider: LlmProvider = "mock"
     rca_model: str = "claude-haiku-4-5-20251001"
     cost_ceiling_usd: float = Field(default=0.50, ge=0)
+    latency_budget_seconds: float = Field(default=30.0, ge=1.0)
     log_json: bool = False
     data_dir: str = "data"
+    # When True, prompts containing high-confidence secrets (AWS keys,
+    # bearer tokens, JWTs, private keys, etc.) raise RawSecretsBlocked
+    # instead of being sent — even after redaction would have rewritten
+    # the match. Trades a tighter privacy posture for occasional refusals
+    # on noisy logs. Default off; flip on for security-conscious tenants.
+    raw_secrets_blocked: bool = False
+    # When False, the redaction pack still runs but matches are logged
+    # instead of substituted. Keep True in production; flip off for local
+    # debugging only.
+    redact_prompts: bool = True
+
+    # Optional LLM-trace export. When ``langfuse_public_key`` AND
+    # ``langfuse_secret_key`` are both set, the tracer POSTs a minimal span
+    # per LLM call to ``langfuse_host``. No-op otherwise. The integration
+    # is deliberately thin (no SDK) so the dependency footprint stays small;
+    # Helicone / OTel-LLM use a similar HTTP-only contract.
+    langfuse_public_key: str | None = None
+    langfuse_secret_key: str | None = None
+    langfuse_host: str = "https://cloud.langfuse.com"
 
     # Live store (AI_ONCALL_TELEMETRY_STORE=live). Required when live is
     # selected; ignored otherwise.
@@ -58,6 +78,21 @@ class Settings(BaseSettings):
     # rollback URL on the public internet is a foot-gun.
     cd_dispatch_url: str | None = None
     cd_dispatch_secret: str | None = None
+
+    # Inbound /webhooks/alert HMAC. When set, every POST must carry an
+    # ``X-Signature: hmac-sha256=<hex>`` header computed over the raw body
+    # with this secret. The same scheme PagerDuty + Grafana use. When unset,
+    # the webhook accepts unsigned requests but warns; never deploy unset
+    # to production.
+    webhook_signing_secret: str | None = None
+
+    # Per-tenant API tokens. Map of ``tenant_id -> bearer_token``; when set,
+    # every API request (except /health, /ready, /metrics, /webhooks/slack/*)
+    # must carry ``Authorization: Bearer <token>`` AND the token must match
+    # the tenant declared in ``X-Tenant-Id``. Empty map keeps the dev-mode
+    # behavior of "header is identity". JSON-encoded in the env var:
+    # AI_ONCALL_TENANT_TOKENS='{"demo": "tok_abc", "acme": "tok_xyz"}'.
+    tenant_tokens: dict[str, str] = Field(default_factory=dict)
 
 
 settings = Settings()

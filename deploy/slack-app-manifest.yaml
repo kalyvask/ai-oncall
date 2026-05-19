@@ -1,0 +1,45 @@
+# Slack App manifest — paste into https://api.slack.com/apps -> Create New
+# App -> From a manifest. Replace the URL below with your own deployment.
+# After install, set:
+#   AI_ONCALL_SLACK_SIGNING_SECRET = Basic Information -> Signing Secret
+#   AI_ONCALL_SLACK_BOT_TOKEN      = OAuth & Permissions -> Bot User OAuth Token
+#   AI_ONCALL_SLACK_DEFAULT_CHANNEL = the channel id (Cxxxxxxxx) you invite the
+#                                     bot into.
+
+display_information:
+  name: ai-oncall
+  description: LLM-powered incident diagnosis. RCAs in Slack within 30s.
+  background_color: "#0a0a0a"
+
+features:
+  bot_user:
+    display_name: ai-oncall
+    always_online: true
+  unfurl_domains: []
+  shortcuts: []
+  slash_commands: []
+
+oauth_config:
+  scopes:
+    bot:
+      - chat:write
+      - chat:write.public
+      - reactions:read
+      - channels:history
+      - im:history
+      - app_mentions:read
+      - users:read
+
+settings:
+  event_subscriptions:
+    request_url: https://YOUR-DEPLOYMENT.example.com/webhooks/slack/event
+    bot_events:
+      - message.channels
+      - message.im
+      - app_mention
+  interactivity:
+    is_enabled: true
+    request_url: https://YOUR-DEPLOYMENT.example.com/webhooks/slack/action
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false

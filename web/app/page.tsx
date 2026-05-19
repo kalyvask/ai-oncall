@@ -1,67 +1,27 @@
-// Incidents inbox.
-//   Composition: editorial Fraunces hero ("4 incidents · 1 actionable now")
-//   anchored left, system summary metadata right. Asymmetric.
-//   Rows: NO side-stripe border (impeccable absolute ban). Severity carried
-//   in a Pill with a colored dot pip — color + shape, not color alone.
-//   Rhythm: tight gap between rows in the same severity bucket; generous
-//   gap before the lower-severity bucket.
+// Incidents inbox. Fetches /incidents from the FastAPI backend at render
+// time. Rows map from the IncidentRow shape returned by the API. When the
+// backend is unreachable, falls back to an empty state with the configured
+// onboarding hint.
 
 import Link from "next/link";
 import { Pill } from "@/components/Pill";
+import { api, type IncidentRow } from "@/lib/api";
 
 type Blast = "low" | "medium" | "high";
+type Severity = "page" | "warn" | "info";
 type Row = {
   id: string;
   service: string;
-  severity: "page" | "warn" | "info";
+  severity: Severity;
   triggered_at: string;
   hypothesis: string;
   confidence: number;
   action: { command: string; blast: Blast; threshold: number };
 };
 
-const ROWS: Row[] = [
-  {
-    id: "0193f4a4-2b87-7a31-9c1f-1d6a93dca8c1",
-    service: "checkout",
-    severity: "page",
-    triggered_at: "2026-04-25T03:14:22Z",
-    hypothesis: "payment SDK regression after stripe v7 to v8 upgrade",
-    confidence: 0.92,
-    action: { command: "git revert abc1234 && deploy payment", blast: "medium", threshold: 0.90 },
-  },
-  {
-    id: "0193f4b1-1c44-7b22-ad80-2e7b04ed91d2",
-    service: "cart",
-    severity: "page",
-    triggered_at: "2026-04-26T14:02:11Z",
-    hypothesis: "cart-db pool saturated at 100%",
-    confidence: 0.86,
-    action: { command: "Bump cart-db pool size; restart largest cart pod", blast: "low", threshold: 0.80 },
-  },
-  {
-    id: "0193f4c2-2d55-7c33-be91-3f8c15fe02e3",
-    service: "search",
-    severity: "warn",
-    triggered_at: "2026-04-27T09:18:50Z",
-    hypothesis: "feature flag search.semantic-rerank flip caused NPE on empty docs",
-    confidence: 0.91,
-    action: { command: "Disable feature flag search.semantic-rerank", blast: "low", threshold: 0.80 },
-  },
-  {
-    id: "0193f4d3-3e66-7d44-cf02-40ad26019404",
-    service: "payment",
-    severity: "warn",
-    triggered_at: "2026-04-28T22:46:30Z",
-    hypothesis: "retry queue not draining; OOM in 90 min",
-    confidence: 0.71,
-    action: { command: "Roll largest payment pod; investigate dequeue path", blast: "medium", threshold: 0.90 },
-  },
-];
-
 const BLAST_TONE: Record<Blast, "pos" | "warn" | "neg"> = { low: "pos", medium: "warn", high: "neg" };
 
-const SEV_TONE: Record<Row["severity"], "neg" | "warn" | "neutral"> = {
+const SEV_TONE: Record<Severity, "neg" | "warn" | "neutral"> = {
   page: "neg",
   warn: "warn",
   info: "neutral",
@@ -75,19 +35,50 @@ const ago = (iso: string): string => {
   return `${Math.floor(h / 24)}d ago`;
 };
 
-export default function IncidentsPage() {
-  const pages = ROWS.filter((r) => r.severity === "page");
-  const others = ROWS.filter((r) => r.severity !== "page");
-  const actionable = ROWS.filter((r) => r.confidence >= 0.85).length;
+function severityForConfidence(top_confidence: number, abstained: boolean): Severity {
+  if (abstained) return "info";
+  if (top_confidence >= 0.85) return "page";
+  if (top_confidence >= 0.6) return "warn";
+  return "info";
+}
+
+function mapIncident(r: IncidentRow): Row {
+  return {
+    id: r.report_id,
+    service: r.service,
+    severity: severityForConfidence(r.top_confidence, r.abstained),
+    triggered_at: r.created_at,
+    hypothesis: r.root_cause_class
+      ? `${r.root_cause_class} in ${r.root_cause_service}`
+      : `root cause in ${r.root_cause_service}`,
+    confidence: r.top_confidence,
+    action: { command: "", blast: "medium", threshold: 0.85 },
+  };
+}
+
+export default async function IncidentsPage() {
+  let rows: Row[] = [];
+  let tenant = "demo";
+  let fetchError: string | null = null;
+  try {
+    const data = await api.incidents(50);
+    tenant = data.tenant_id;
+    rows = data.items.map(mapIncident);
+  } catch (e) {
+    fetchError = e instanceof Error ? e.message : String(e);
+  }
+
+  const pages = rows.filter((r) => r.severity === "page");
+  const others = rows.filter((r) => r.severity !== "page");
+  const actionable = rows.filter((r) => r.confidence >= 0.85).length;
 
   return (
     <div className="flex flex-col gap-12">
-      {/* HERO — editorial serif, anchored left. Single Fraunces moment. */}
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="eyebrow mb-3">Open incidents</p>
           <h1 className="font-serif text-3xl font-normal tracking-tight text-ink-0">
-            {ROWS.length} incidents
+            {rows.length} incidents
             <span className="text-ink-3"> · </span>
             <span className="text-acc">{actionable} actionable</span>
           </h1>
@@ -103,12 +94,18 @@ export default function IncidentsPage() {
           </div>
           <div>
             <dt className="eyebrow">Tenant</dt>
-            <dd className="mt-1 font-mono text-lg tabular-nums text-ink-0">demo</dd>
+            <dd className="mt-1 font-mono text-lg tabular-nums text-ink-0">{tenant}</dd>
           </div>
         </dl>
       </header>
 
-      {/* GROUP: pages — tight rhythm. */}
+      {fetchError && (
+        <p className="max-w-prose text-sm text-rose-400">
+          Failed to reach the API: {fetchError}. Is the FastAPI server running on{" "}
+          <code>{process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000"}</code>?
+        </p>
+      )}
+
       {pages.length > 0 && (
         <section>
           <h2 className="eyebrow mb-3">Paging now</h2>
@@ -120,10 +117,9 @@ export default function IncidentsPage() {
         </section>
       )}
 
-      {/* GROUP: warnings — quieter. */}
       {others.length > 0 && (
         <section>
-          <h2 className="eyebrow mb-3">Warnings</h2>
+          <h2 className="eyebrow mb-3">Warnings &amp; info</h2>
           <ul className="divide-y divide-ink-7 border-y border-ink-7" role="list">
             {others.map((r) => (
               <IncidentRow key={r.id} row={r} />
@@ -132,10 +128,10 @@ export default function IncidentsPage() {
         </section>
       )}
 
-      {ROWS.length === 0 && (
+      {!fetchError && rows.length === 0 && (
         <p className="max-w-prose text-ink-3">
-          No alerts yet. Point your OpenTelemetry exporter at <code>/v1/traces</code> to start;
-          the agent will assemble its first RCA on the next page.
+          No incidents yet. POST an alert to <code>/webhooks/alert</code> with{" "}
+          <code>X-Tenant-Id: {tenant}</code> to trigger the pipeline.
         </p>
       )}
     </div>

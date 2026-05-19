@@ -1,0 +1,30 @@
+{
+  "case_id": "cloudflare_2022_bgp",
+  "family": "config_drift",
+  "difficulty": "hard",
+  "source_url": "https://blog.cloudflare.com/cloudflare-outage-on-june-21-2022/",
+  "alert": {
+    "alert_id": "cf_2022_06_21_001",
+    "tenant_id": "demo",
+    "fired_at": "2022-06-21T06:34:00Z",
+    "source": "manual",
+    "severity": "page",
+    "service": "edge-router",
+    "title": "Edge router p99 5xx jumped, 19 of 200 datacenters dark",
+    "description": "Customer 5xx rates jumped within 30s; multiple datacenters unreachable from each other. Backbone routing changes recently merged.",
+    "signal": {
+      "kind": "metric_threshold",
+      "metric": "http.server.error_rate",
+      "agg": "rate",
+      "value_ms": 100,
+      "threshold_ms": 5,
+      "window_minutes": 5
+    },
+    "labels": {"env": "prod", "team": "edge"}
+  },
+  "expected": {
+    "top_root_cause_service": "backbone-router",
+    "root_cause_class": "config_drift",
+    "notes": "Cloudflare's MCP backbone routing policy change. Specifically a prefix-list change that withdrew a critical announcement at the edge."
+  }
+}

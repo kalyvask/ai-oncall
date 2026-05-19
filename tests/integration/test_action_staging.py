@@ -137,11 +137,23 @@ def test_auto_threshold_boundary() -> None:
 
 
 def test_propose_threshold_boundary() -> None:
-    just_below = _hypothesis("manual investigation", confidence=PROPOSE_THRESHOLD - 0.001)
-    just_above = _hypothesis("manual investigation", confidence=PROPOSE_THRESHOLD)
+    """At/above PROPOSE_THRESHOLD with a kind on the allowlist -> propose.
+    Below -> recommend. The kind has to be on the propose allowlist (rollback,
+    restart, feature_flag); 'manual' is policy-blocked at every tier."""
+    just_below = _hypothesis("disable feature flag X", confidence=PROPOSE_THRESHOLD - 0.001)
+    just_above = _hypothesis("disable feature flag X", confidence=PROPOSE_THRESHOLD)
     out = stage_actions(_report([just_below, just_above]))
     assert out.hypotheses[0].staged_action.tier == "recommend"  # type: ignore[union-attr]
     assert out.hypotheses[1].staged_action.tier == "propose"  # type: ignore[union-attr]
+
+
+def test_manual_kind_is_policy_blocked_from_propose() -> None:
+    """'manual' is free-text and can't reach propose regardless of confidence
+    — the allowlist defends against the LLM emitting an unstructured command
+    behind an Approve button."""
+    h = _hypothesis("manual investigation by oncall", confidence=0.99)
+    out = stage_actions(_report([h]))
+    assert out.hypotheses[0].staged_action.tier == "recommend"  # type: ignore[union-attr]
 
 
 def test_existing_staged_action_not_overwritten() -> None:

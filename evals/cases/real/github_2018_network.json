@@ -1,0 +1,30 @@
+{
+  "case_id": "github_2018_network",
+  "family": "config_drift",
+  "difficulty": "hard",
+  "source_url": "https://github.blog/2018-10-30-oct21-post-incident-analysis/",
+  "alert": {
+    "alert_id": "gh_2018_10_21_network",
+    "tenant_id": "demo",
+    "fired_at": "2018-10-21T22:54:00Z",
+    "source": "manual",
+    "severity": "page",
+    "service": "mysql-primary",
+    "title": "MySQL primary write failures, replication divergence across coasts",
+    "description": "43-second network partition between US East and US West data centers. Writes routed to West but cluster orchestrator failed over while partition was active, creating two primaries.",
+    "signal": {
+      "kind": "metric_threshold",
+      "metric": "db.write_error_rate",
+      "agg": "rate",
+      "value_ms": 60,
+      "threshold_ms": 1,
+      "window_minutes": 5
+    },
+    "labels": {"env": "prod", "team": "data"}
+  },
+  "expected": {
+    "top_root_cause_service": "interdc-network",
+    "root_cause_class": "config_drift",
+    "notes": "Brief network partition between primary DCs; orchestrator promoted a secondary during the partition, leading to data divergence after the partition healed."
+  }
+}

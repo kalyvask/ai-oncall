@@ -1,0 +1,57 @@
+# Local dev stack: ai-oncall API + a minimal Prometheus + Loki for the
+# `live` telemetry driver. Add Grafana with two clicks if you want a UI on
+# top.
+#
+# Quickstart:
+#   cp .env.example .env       # fill ANTHROPIC_API_KEY if you want real LLM
+#   docker compose up --build  # API on :8000, Prom :9090, Loki :3100
+#   curl http://localhost:8000/health
+#
+# The `web/` Next.js dev server is intentionally NOT in this compose file —
+# run it with `cd web && npm run dev` so you keep HMR. Production builds
+# are served by the API container's mounted bundle.
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      AI_ONCALL_DATA_DIR: /app/data
+    volumes:
+      - ai_oncall_data:/app/data
+    depends_on:
+      - prometheus
+      - loki
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=2)"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=2d"
+
+  loki:
+    image: grafana/loki:3.1.1
+    ports:
+      - "3100:3100"
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    volumes:
+      - loki_data:/loki
+
+volumes:
+  ai_oncall_data:
+  prometheus_data:
+  loki_data:

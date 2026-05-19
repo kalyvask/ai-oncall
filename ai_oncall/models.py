@@ -181,8 +181,15 @@ class Investigation(_Lax):
 
 
 class EvidenceItem(_Lax):
-    claim: str
-    source: str
+    """A single supporting claim with a non-empty pointer to its origin.
+
+    ``source`` must reference something verifiable: a tool-call index
+    (``tool_calls[2]``), a commit SHA, a log query handle, or a deploy ID.
+    Empty strings are rejected because an unsourced claim defeats the
+    citation contract and degrades the abstention signal."""
+
+    claim: str = Field(min_length=1)
+    source: str = Field(min_length=1)
 
 
 ActionKind = Literal["rollback", "restart", "scale", "feature_flag", "manual", "noop"]
@@ -228,6 +235,27 @@ class Escalation(_Lax):
     reason: str | None = None
 
 
+class AbstentionRecord(_Lax):
+    """One triggered abstention rule, surfaced on the RcaReport.
+
+    The eval harness uses ``code`` for per-rule precision/recall grading;
+    the UI uses ``description`` for the human-facing "why this abstained"
+    block. ``detail`` is freeform per-rule context."""
+
+    code: str = Field(min_length=1)
+    description: str = Field(min_length=1)
+    detail: dict[str, Any] = Field(default_factory=dict)
+
+
+class Calibration(_Lax):
+    """Output of the deterministic calibration pass. ``abstain=False`` with
+    an empty ``reasons`` list means the LLM's verdict was accepted as-is."""
+
+    abstain: bool
+    reasons: list[AbstentionRecord] = Field(default_factory=list)
+    top_confidence_cap: float | None = Field(default=None, ge=0, le=1)
+
+
 class RcaReport(_Lax):
     report_id: str
     tenant_id: str
@@ -237,3 +265,4 @@ class RcaReport(_Lax):
     investigation: Investigation | None = None
     hypotheses: list[Hypothesis] = Field(min_length=1, max_length=5)
     escalation: Escalation | None = None
+    calibration: Calibration | None = None

@@ -1,0 +1,30 @@
+{
+  "case_id": "atlassian_2022_deletion",
+  "family": "deploy_regression",
+  "difficulty": "medium",
+  "source_url": "https://www.atlassian.com/engineering/post-incident-review-april-2022-outage",
+  "alert": {
+    "alert_id": "atlassian_2022_04_05_001",
+    "tenant_id": "demo",
+    "fired_at": "2022-04-05T07:38:00Z",
+    "source": "manual",
+    "severity": "page",
+    "service": "site-routing",
+    "title": "775 customer sites unreachable; tenant-router 5xx jumped",
+    "description": "A scripted deactivation job intended to disable a legacy feature for specific tenants was misconfigured to also delete the tenants' product instances permanently.",
+    "signal": {
+      "kind": "metric_threshold",
+      "metric": "http.server.error_rate",
+      "agg": "rate",
+      "value_ms": 12,
+      "threshold_ms": 1,
+      "window_minutes": 5
+    },
+    "labels": {"env": "prod", "team": "platform"}
+  },
+  "expected": {
+    "top_root_cause_service": "deactivation-script",
+    "root_cause_class": "deploy_regression",
+    "notes": "Operator script ran a hard-delete path instead of the intended soft-disable, removing tenant data across 775 cloud sites. Backups + multi-day restore process required."
+  }
+}

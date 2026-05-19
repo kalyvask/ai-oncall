@@ -1,0 +1,16 @@
+# Minimal Prometheus config used by docker-compose. Scrapes the ai-oncall
+# /metrics endpoint plus itself. Add your application targets here.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: ai-oncall
+    static_configs:
+      - targets: ["api:8000"]
+    metrics_path: /metrics
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

@@ -43,7 +43,15 @@ DEFAULT_TIMEOUT_SECONDS = 5.0
 
 
 class SlackSendError(RuntimeError):
-    """Raised when chat.postMessage fails or returns ``ok: false``."""
+    """Raised when chat.postMessage fails or returns ``ok: false``.
+
+    ``retry_after_seconds`` is set when Slack returned a 429 with a
+    ``Retry-After`` header. The job worker uses it to schedule the next
+    attempt instead of using the default exponential backoff."""
+
+    def __init__(self, message: str, *, retry_after_seconds: float | None = None) -> None:
+        super().__init__(message)
+        self.retry_after_seconds = retry_after_seconds
 
 
 @dataclass(frozen=True)
@@ -100,13 +108,27 @@ class HttpxSlackTransport:
             resp = self._client.post(url, headers=headers, json=kwargs, timeout=self._timeout)
         except httpx.HTTPError as e:
             raise SlackSendError(f"Slack request failed: {e}") from e
+        headers_obj = getattr(resp, "headers", None) or {}
+        retry_after_header = headers_obj.get("Retry-After") if hasattr(headers_obj, "get") else None
+        if resp.status_code == 429:
+            retry_after = _parse_retry_after(retry_after_header)
+            raise SlackSendError(
+                f"Slack rate limited (429), retry after {retry_after}s",
+                retry_after_seconds=retry_after,
+            )
         if resp.status_code != 200:
             raise SlackSendError(
                 f"Slack returned {resp.status_code}: {resp.text[:200]}"
             )
         body = resp.json()
         if not body.get("ok"):
-            raise SlackSendError(f"Slack API error: {body.get('error')!r}")
+            # Slack body errors (e.g. ratelimited, server_error) can also
+            # carry Retry-After in the response headers.
+            retry_after = _parse_retry_after(retry_after_header)
+            raise SlackSendError(
+                f"Slack API error: {body.get('error')!r}",
+                retry_after_seconds=retry_after,
+            )
         return body
 
 
@@ -208,6 +230,32 @@ def post_thread_reply(
 
 
 # --- internals -----------------------------------------------------------
+
+
+def _parse_retry_after(header: str | None) -> float | None:
+    """Slack sends Retry-After as integer seconds (per RFC 7231 §7.1.3).
+    A small number of clients send HTTP dates; we accept either."""
+    if not header:
+        return None
+    try:
+        return max(0.0, float(header))
+    except (TypeError, ValueError):
+        pass
+    try:
+        from email.utils import parsedate_to_datetime
+        from datetime import timezone
+
+        dt = parsedate_to_datetime(header)
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        from datetime import datetime as _dt
+
+        delta = (dt - _dt.now(timezone.utc)).total_seconds()
+        return max(0.0, delta)
+    except Exception:
+        return None
 
 
 def _default_transport() -> SlackTransport:

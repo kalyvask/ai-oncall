@@ -37,7 +37,13 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from ai_oncall.models import Escalation, Hypothesis, RcaReport
+from ai_oncall.models import (
+    AbstentionRecord,
+    Calibration as CalibrationModel,
+    Escalation,
+    Hypothesis,
+    RcaReport,
+)
 
 
 # --- defaults --------------------------------------------------------------
@@ -243,17 +249,29 @@ def calibrate(
             triggered.append(r)
 
     if not triggered:
-        # Calibration agrees with the LLM; do not touch the report.
-        return report, CalibrationResult(abstain=False, reasons=())
+        # Calibration agrees with the LLM. Attach an "accepted" record so
+        # downstream consumers (UI, eval) can tell calibration ran and chose
+        # not to abstain — vs. the (older) case where calibration was skipped.
+        accepted = CalibrationModel(abstain=False, reasons=[], top_confidence_cap=None)
+        return report.model_copy(update={"calibration": accepted}), CalibrationResult(
+            abstain=False, reasons=()
+        )
 
     cap = None
     if any(r.code in ("cold_start", "budget_exhausted") for r in triggered):
         cap = min(top.confidence, 0.40)
 
-    # Mutate via a model copy so pydantic re-validates.
     description = " | ".join(r.description for r in triggered)
     new_escalation = Escalation(should_escalate=True, reason=description)
-    updates: dict[str, object] = {"escalation": new_escalation}
+    structured = CalibrationModel(
+        abstain=True,
+        reasons=[
+            AbstentionRecord(code=r.code, description=r.description, detail=dict(r.detail))
+            for r in triggered
+        ],
+        top_confidence_cap=cap,
+    )
+    updates: dict[str, object] = {"escalation": new_escalation, "calibration": structured}
 
     if cap is not None and top.confidence > cap:
         new_top = top.model_copy(update={"confidence": cap})

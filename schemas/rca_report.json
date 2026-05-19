@@ -151,6 +151,27 @@
         "should_escalate": {"type": "boolean"},
         "reason": {"type": "string"}
       }
+    },
+    "calibration": {
+      "type": ["object", "null"],
+      "description": "Structured output of the deterministic abstention pass. abstain=false with reasons=[] means calibration ran and accepted the LLM verdict.",
+      "required": ["abstain", "reasons"],
+      "properties": {
+        "abstain": {"type": "boolean"},
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["code", "description"],
+            "properties": {
+              "code": {"type": "string", "minLength": 1},
+              "description": {"type": "string", "minLength": 1},
+              "detail": {"type": "object"}
+            }
+          }
+        },
+        "top_confidence_cap": {"type": ["number", "null"], "minimum": 0, "maximum": 1}
+      }
     }
   }
 }

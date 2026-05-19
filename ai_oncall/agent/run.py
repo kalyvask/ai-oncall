@@ -42,7 +42,19 @@ from ai_oncall.topology.builder import build as build_topology
 logger = logging.getLogger(__name__)
 
 
-def run_rca(alert: Alert, store: TelemetryStore, llm: LlmClient) -> RcaReport:
+def run_rca(
+    alert: Alert,
+    store: TelemetryStore,
+    llm: LlmClient,
+    *,
+    skip_slack: bool = False,
+) -> RcaReport:
+    """Run the full RCA pipeline synchronously.
+
+    ``skip_slack=True`` is set by the job worker, which handles delivery via
+    a separate retryable ``slack_post`` job. The CLI keeps the default
+    (inline best-effort post) so developer flows stay one-shot.
+    """
     tracer = LlmTracer()
     plan_obj = plan_stage(alert, llm, tracer=tracer)
     topology = build_topology(alert.tenant_id, store)
@@ -70,13 +82,11 @@ def run_rca(alert: Alert, store: TelemetryStore, llm: LlmClient) -> RcaReport:
     # continue.
     try:
         save_incident(report, abstained=calibration.abstain)
-    except Exception:  # pragma: no cover — defensive
+    except Exception:
         logger.exception("save_incident_failed", extra={"report_id": report.report_id})
 
-    # Stage 6 POST: optionally publish to Slack. Configured tenants get the
-    # RCA in their channel; the rest just see the API response. Never let a
-    # Slack outage break the live pipeline.
-    _maybe_post_to_slack(report)
+    if not skip_slack:
+        _maybe_post_to_slack(report)
 
     return report
 
