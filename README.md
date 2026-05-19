@@ -17,9 +17,11 @@ graph is built from observed OTel spans with a 10-minute window;
 `topology.yaml` is a fallback. Schemas first, evals first, no surprise
 vendor lock-in.
 
-> Status: scaffold. The LLM call is mocked until a default model is chosen
-> (BRIEF.md §13). Tests: 118/118 green. Eval: 6 synthetic fault families,
-> perfect replay-mode scores; CI fails on > 5 pp drop vs the previous run.
+> Status: durable pipeline wired end-to-end; real Anthropic adapter (Haiku 4.5
+> default, structured-output + retry-on-429/5xx + per-instance cost ceiling).
+> Tests: 263 green. Eval: 6 synthetic fault families plus 5 starter cases
+> from public postmortems (Cloudflare 2022, Datadog 2023, AWS 2021, GitHub
+> 2018, Atlassian 2022); CI fails on > 5 pp drop vs the previous run.
 
 The product contract lives in [BRIEF.md](BRIEF.md). The visual contract for
 the Next.js UI lives in [UI_DESIGN.md](UI_DESIGN.md). Read those before
@@ -210,9 +212,10 @@ after SYNTHESIZE).
 
 | Step | Module | Status |
 |---|---|---|
-| 1 RECEIVE | `ingest/alerts.py` | ✅ schema-validated, multi-tenant |
+| 1 RECEIVE | `ingest/alerts.py` | ✅ schema-validated, multi-tenant, HMAC-signed webhook |
+| 1a ENQUEUE | `ai_oncall/jobs/` | ✅ durable SQLite job queue, idempotent on `(tenant, alert_id)`, async worker, delivery outbox with retries |
 | 2 ASSEMBLE | `topology/builder.py` + `topology/from_spans.py` | ✅ live spans (10-min window) with `topology.yaml` fallback |
-| 3 PLAN | `agent/plan.py` | ✅ via MockLlm |
+| 3 PLAN | `agent/plan.py` | ✅ Anthropic adapter (Haiku 4.5 default) or MockLlm; PII/secret redaction before send |
 | 3a PRUNE | `agent/causal.py` | ✅ topology-reachability pruner |
 | 4 INVESTIGATE | `agent/investigate.py` | ✅ tool-using loop, 8-call cap |
 | 5 SYNTHESIZE | `agent/synthesize.py` | ✅ single-shot baseline |
@@ -418,31 +421,35 @@ on the roadmap.
 
 ## Roadmap
 
-1. Sandboxed runner for `auto` actions and a Slack approval button for
-   `propose` actions. Staging classifies the tier today; the execution
-   layer plugs in on top.
+Recently landed (see commit history for details): durable alert→RCA→Slack
+job pipeline with idempotency and retries; real Anthropic adapter with
+JSON-mode and cost ceiling; action allowlist + dry-run preview for propose
+tier; `/metrics`, `/ready`, `/sloreport`, `/incidents/{id}/diff/{other}`;
+HMAC-signed inbound webhooks; per-tenant bearer-token auth; PII/secret
+redaction before LLM calls; optional Langfuse export; Dockerfile +
+docker-compose stack.
+
+1. Sandboxed runner for the `auto` tier (the allowlist + dry-run preview
+   landed; the sandboxed execution layer is the next step).
 2. APM/traces backend for the `live` driver (Honeycomb or Datadog), so
    the dynamic topology builder works end-to-end without a separate OTel
    ingest path.
-3. Optional LLM-trace export sink via `AI_ONCALL_LLM_TRACE_SINK`
-   (Langfuse / Helicone / OTel-LLM). The contract on
-   `Investigation.llm_calls` is already shaped to map onto any of those.
-4. Embeddings-backed past-incident retrieval, replacing the SQL `LIKE`
+3. Embeddings-backed past-incident retrieval, replacing the SQL `LIKE`
    in `learnings/store.py`.
-5. Multi-alert correlation and deduplication before the agent spends
+4. Multi-alert correlation and deduplication before the agent spends
    tokens.
-6. Specialist sub-agents (K8s, AWS, metrics, code) with a parallel
+5. Specialist sub-agents (K8s, AWS, metrics, code) with a parallel
    router.
-7. Wire the RCAEval and OpenRCA stubs in `evals/` to a real harness.
-8. Confidence tiers in the RCA output, mapped onto the existing
+6. Wire the RCAEval and OpenRCA stubs in `evals/` to a real harness.
+7. Confidence tiers in the RCA output, mapped onto the existing
    ranked-hypothesis schema.
-9. Post-mortem auto-draft plus Jira / Linear ticket creation for
+8. Post-mortem auto-draft plus Jira / Linear ticket creation for
    follow-ups.
-10. Anomaly detection on SLIs and post-deploy verification.
-11. MCP server, so Cursor and Claude Desktop can drive investigations.
-12. Live cost meter with auto-degrade to a cheaper model at 80% of
-    `AI_ONCALL_COST_CEILING_USD`.
-13. PagerDuty / incident.io ingest, replacing the synthetic webhook in
+9. Anomaly detection on SLIs and post-deploy verification.
+10. MCP server, so Cursor and Claude Desktop can drive investigations.
+11. Auto-degrade to a cheaper model at 80% of `AI_ONCALL_COST_CEILING_USD`
+    (the cost ceiling itself is enforced today via `LlmBudgetExceeded`).
+12. PagerDuty / incident.io ingest, replacing the synthetic webhook in
     `ingest/alerts.py`.
 
 ## Open decisions (BRIEF.md §13 — ask before deciding)
