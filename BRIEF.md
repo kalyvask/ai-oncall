@@ -53,7 +53,7 @@ roadmap, not in v1.
 | 3 | OTLP metrics | protobuf via `POST /v1/metrics`, RED + saturation | 1-min granularity | last 30 min |
 | 4 | OTLP logs | protobuf via `POST /v1/logs`, severity ≥ WARN, with trace_id | last 30 min | last 30 min |
 | 5 | GitHub deploys | webhook + REST backfill, patch ≤ 2KB | last 24 h | last 24 h |
-| 6 | Service topology | observed spans + 10-min decay; static `topology.yaml` fallback | live | continuous |
+| 6 | Causal dependency graph | observed spans + 10-min decay; static `topology.yaml` fallback | live | continuous |
 | 7 | Runbooks | markdown in `runbooks/`, keyed by service or alert name | static | reload on SIGHUP |
 
 Don't let the agent improvise these. The wire formats are fixed by upstream
@@ -233,6 +233,8 @@ ai-oncall/
       builder.py
       decay.py                     Sliding window, separated.
       retriever.py
+      causal_graph.py              CausalGraph — first-class graph the agent
+                                   reasons over (reachable / downstream).
     agent/
       plan.py                      Stage 3.
       investigate.py               Stage 4 — tool-using loop.

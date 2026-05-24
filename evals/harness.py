@@ -1,12 +1,18 @@
-"""Synthetic-track eval runner. BRIEF.md §7.
+"""Three-track eval runner. BRIEF.md §7.
 
-For step 2 the predicted report is the expected fixture (replay mode); the
-harness exercises the schema, scoring, and aggregation paths so it is ready
-the moment a real agent loop lands in step 6. Once SYNTHESIZE is wired, the
-predicted report comes from `agent.synthesize.run(case)` instead.
+Tracks:
+  * synthetic  — hand-crafted fault families under ``evals/cases/``.
+  * rcaeval    — RCAEval RE3-OB benchmark; ``--data-dir`` required.
+  * openrca    — OpenRCA Bank benchmark;   ``--data-dir`` required.
+
+All three tracks run in replay mode today: predicted report == expected
+report, so the harness exercises the schema, scoring, and aggregation paths
+end-to-end with deterministic scores. When the agent prediction step is
+wired in (BRIEF.md §11 step 6), only ``_predict`` changes; the scoring and
+aggregation paths stay identical.
 
 CI fail-fast: any track regression > 5 percentage points absolute fails the
-run. The same threshold is used by `--baseline` to compare a current run
+run. The same threshold is used by ``--baseline`` to compare a current run
 against a previous JSON snapshot and surface per-metric per-family drops.
 """
 
@@ -18,9 +24,9 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable
+from typing import Callable, Iterable, Iterator
 
-from ai_oncall.models import RcaReport
+from ai_oncall.models import Alert, RcaReport
 from evals.scoring import score_all
 
 REPO = Path(__file__).resolve().parents[1]
@@ -53,11 +59,21 @@ class Regression:
     delta: float
 
 
+def _predict(_alert: Alert, expected: RcaReport) -> RcaReport:
+    """Replay mode: the predicted report is the expected fixture.
+
+    Swap this for ``ai_oncall.agent.run.run_rca(alert, store, llm)`` once a
+    track is ready to exercise the real agent (BRIEF.md §11 step 6). The
+    scoring path downstream stays unchanged.
+    """
+    return expected
+
+
 def _load_case(path: Path) -> CaseResult:
     with path.open(encoding="utf-8") as f:
         case = json.load(f)
     expected = RcaReport.model_validate_json((REPO / case["expected_fixture"]).read_text(encoding="utf-8"))
-    predicted = expected  # replay mode until step 6 wires the agent
+    predicted = _predict(expected.alert, expected)
     return CaseResult(
         case_id=case["case_id"],
         family=case["family"],
@@ -68,6 +84,37 @@ def _load_case(path: Path) -> CaseResult:
 
 def run(cases_dir: Path = CASES_DIR) -> list[CaseResult]:
     return [_load_case(p) for p in sorted(cases_dir.glob("*.json"))]
+
+
+def _run_benchmark_track(
+    track: str,
+    loader: Callable[[Path], Iterator[tuple[Alert, RcaReport]]],
+    data_dir: Path,
+) -> list[CaseResult]:
+    """Score every ``(Alert, RcaReport)`` pair yielded by ``loader``.
+
+    Replay mode today (predicted == expected) so the path is exercised end-
+    to-end. Family is read from the expected report's ``alert.labels.family``
+    when present, otherwise pinned to the track name; difficulty is pinned
+    to ``"real"``.
+    """
+    results: list[CaseResult] = []
+    for alert, expected in loader(data_dir):
+        predicted = _predict(alert, expected)
+        family = expected.alert.labels.get("family", track)
+        case_id = expected.alert.labels.get(
+            "scenario" if track == "rcaeval" else "incident",
+            expected.report_id,
+        )
+        results.append(
+            CaseResult(
+                case_id=str(case_id),
+                family=str(family),
+                difficulty="real",
+                metrics=score_all(predicted, expected),
+            )
+        )
+    return results
 
 
 def aggregate(results: Iterable[CaseResult]) -> dict[str, float]:
@@ -184,11 +231,10 @@ def main(argv: list[str] | None = None) -> int:
             print("ERROR: --data-dir required for --track=rcaeval", file=sys.stderr)  # noqa: T201
             return 2
         try:
-            list(load_rcaeval(args.data_dir))  # raises NotImplementedError today
-        except NotImplementedError as exc:
-            print(f"SKIP rcaeval track: {exc}", file=sys.stderr)  # noqa: T201
-            return 0
-        results = []  # populated once the loader lands
+            results = _run_benchmark_track("rcaeval", load_rcaeval, args.data_dir)
+        except (FileNotFoundError, NotADirectoryError) as exc:
+            print(f"ERROR: rcaeval data dir: {exc}", file=sys.stderr)  # noqa: T201
+            return 2
     else:  # openrca
         from evals.openrca_loader import load_cases as load_openrca
 
@@ -196,11 +242,10 @@ def main(argv: list[str] | None = None) -> int:
             print("ERROR: --data-dir required for --track=openrca", file=sys.stderr)  # noqa: T201
             return 2
         try:
-            list(load_openrca(args.data_dir))
-        except NotImplementedError as exc:
-            print(f"SKIP openrca track: {exc}", file=sys.stderr)  # noqa: T201
-            return 0
-        results = []
+            results = _run_benchmark_track("openrca", load_openrca, args.data_dir)
+        except (FileNotFoundError, NotADirectoryError) as exc:
+            print(f"ERROR: openrca data dir: {exc}", file=sys.stderr)  # noqa: T201
+            return 2
 
     aggregates = aggregate(results)
     print(render(results, aggregates))  # noqa: T201 — eval CLI output, not application logging

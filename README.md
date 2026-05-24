@@ -12,16 +12,20 @@ remediation action staged into `recommend` / `propose` / `auto` tiers.
 
 Single Python process plus a Next.js dashboard. SQLite for dev, DuckDB for
 single-node prod, Snowflake for multi-tenant prod, plus an opt-in `live`
-driver that reads metrics from Prometheus and logs from Loki. The service
-graph is built from observed OTel spans with a 10-minute window;
-`topology.yaml` is a fallback. Schemas first, evals first, no surprise
-vendor lock-in.
+driver that reads metrics from Prometheus and logs from Loki. The core
+primitive is the **causal dependency graph** — a tenant-scoped, directed
+service graph built from observed OTel spans (10-minute window;
+`topology.yaml` is the fallback) that the PRUNE step walks to drop
+structurally impossible hypotheses before the LLM spends its 8-call budget
+on them. Schemas first, evals first, no surprise vendor lock-in.
 
 > Status: durable pipeline wired end-to-end; real Anthropic adapter (Haiku 4.5
 > default, structured-output + retry-on-429/5xx + per-instance cost ceiling).
-> Tests: 263 green. Eval: 6 synthetic fault families plus 5 starter cases
-> from public postmortems (Cloudflare 2022, Datadog 2023, AWS 2021, GitHub
-> 2018, Atlassian 2022); CI fails on > 5 pp drop vs the previous run.
+> Tests: 280 green. Eval: 6 synthetic fault families, 5 starter cases from
+> public postmortems (Cloudflare 2022, Datadog 2023, AWS 2021, GitHub 2018,
+> Atlassian 2022), plus RCAEval RE3-OB and OpenRCA Bank loaders for
+> standardized real-data benchmarks. CI fails on > 5 pp drop vs the previous
+> run.
 
 The product contract lives in [BRIEF.md](BRIEF.md). The visual contract for
 the Next.js UI lives in [UI_DESIGN.md](UI_DESIGN.md). Read those before
@@ -83,11 +87,11 @@ below for full env-var details and the install commands.
 ## What it does
 
 1. Receives an alert (PagerDuty / Slack / manual / OTLP).
-2. Builds the service graph from observed OTel spans in a 10-minute window;
-   falls back to `topology.yaml` when no spans are seen.
+2. Builds the causal dependency graph from observed OTel spans in a 10-minute
+   window; falls back to `topology.yaml` when no spans are seen.
 3. Plans 3-5 ranked hypotheses with the LLM, then prunes any whose claimed
-   root cause is unreachable from the alerting service in the topology
-   graph.
+   root cause is unreachable from the alerting service in the causal
+   dependency graph.
 4. Runs up to 8 deterministic tool calls against telemetry (live Prometheus
    + Loki when `AI_ONCALL_TELEMETRY_STORE=live`), deploys, topology, and
    runbooks.
@@ -105,7 +109,7 @@ below for full env-var details and the install commands.
 ```bash
 # Backend
 pip install -e ".[dev]"
-pytest                                                # 118 tests
+pytest                                                # 280 tests
 python -m evals.harness                               # synthetic eval, 6 cases
 python -m evals.harness --emit-json runs/today.json   # snapshot for drift baseline
 python -m evals.harness --baseline runs/today.json    # fail on > 5 pp drop
@@ -144,9 +148,10 @@ ai-oncall/
     topology/
       builder.py                    stage 2 ASSEMBLE — live spans + yaml fallback
       from_spans.py                 pure: spans -> TopologySnapshot
+      causal_graph.py               CausalGraph — first-class graph the agent reasons over
     agent/
       plan.py                       stage 3 PLAN
-      causal.py                     PRUNE — drops topology-impossible hypotheses
+      causal.py                     PRUNE — drops graph-impossible hypotheses
       investigate.py                stage 4 INVESTIGATE — tool-using loop
       synthesize.py                 stage 5 SYNTHESIZE — single-shot baseline
       calibration.py                stage 5b — deterministic abstention rules
@@ -182,10 +187,10 @@ ai-oncall/
 
   evals/
     harness.py                      synthetic / rcaeval / openrca tracks
-    scoring.py                      4 metrics from BRIEF §7
+    scoring.py                      4 metrics from BRIEF §7 (transformer-backed cosine)
     cases/                          one JSON per scenario
-    rcaeval_loader.py               documented stub (BRIEF §11 step 9)
-    openrca_loader.py               documented stub
+    rcaeval_loader.py               RE3-OB loader: <data_dir>/<scenario>/gt.json
+    openrca_loader.py               OpenRCA Bank loader: <data_dir>/incidents/*.json
 
   fixtures/synthetic_alerts/        6 alerts, one per fault family
   fixtures/expected_reports/        hand-authored expected RCAs
@@ -394,9 +399,9 @@ multi-tenant prod once a customer has telemetry there.
 ```bash
 make eval                                      # synthetic, 6 cases, replay mode
 python -m evals.harness --track rcaeval \
-  --data-dir /path/to/RCAEval                  # stub today, skips with exit 0
+  --data-dir /path/to/RCAEval                  # RE3-OB: one scenario subdir per fault
 python -m evals.harness --track openrca \
-  --data-dir /path/to/OpenRCA                  # stub today, skips with exit 0
+  --data-dir /path/to/OpenRCA                  # OpenRCA Bank: incidents/*.json
 
 # Drift detection: snapshot a run, then fail CI on any > 5 pp drop.
 python -m evals.harness --emit-json runs/2026-05-05.json
@@ -408,6 +413,19 @@ in replay mode; thresholds (0.80 / 0.50 / 1.50 / 0.80) leave headroom for the
 real LLM regression once a default model is chosen. The drift mode reports
 per-metric per-family deltas and exits non-zero on regressions, so CI can
 catch a prompt or model change that quietly degrades a single fault family.
+
+The `rcaeval` and `openrca` tracks expect the layouts documented in
+`evals/rcaeval_loader.py` and `evals/openrca_loader.py`. The loader reads
+the ground-truth label and engineer narrative; the harness scores the four
+metrics in replay mode today (same path as synthetic). Swap `_predict` in
+`evals/harness.py` for `ai_oncall.agent.run.run_rca` to score the real
+agent on the same benchmarks.
+
+`reason_cosine` ships with a bag-of-words fallback so CI never needs a model
+download. Set `AI_ONCALL_EVAL_EMBED=transformers` and install the optional
+extra (`pip install -e ".[eval-embeddings]"`) to switch to
+`sentence-transformers/all-MiniLM-L6-v2` embeddings — same 0.5 threshold,
+much better recall on paraphrases.
 
 ## LLM observability
 
@@ -440,7 +458,9 @@ docker-compose stack.
    tokens.
 5. Specialist sub-agents (K8s, AWS, metrics, code) with a parallel
    router.
-6. Wire the RCAEval and OpenRCA stubs in `evals/` to a real harness.
+6. Swap `evals/harness.py:_predict` for `agent.run.run_rca` on the
+   `rcaeval` / `openrca` tracks so the benchmarks score the real agent
+   instead of running in replay mode.
 7. Confidence tiers in the RCA output, mapped onto the existing
    ranked-hypothesis schema.
 8. Post-mortem auto-draft plus Jira / Linear ticket creation for

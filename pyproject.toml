@@ -26,6 +26,7 @@ dev = [
   "pre-commit>=3.7",
 ]
 anthropic = ["anthropic>=0.34"]
+eval-embeddings = ["sentence-transformers>=2.7"]
 
 [project.scripts]
 "ai-oncall" = "ai_oncall.cli:app"

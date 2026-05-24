@@ -1,15 +1,22 @@
-"""4 eval metrics from BRIEF.md §7. Cosine uses a hash-based fallback when
-sentence-transformers is unavailable so CI does not require a model download.
+"""4 eval metrics from BRIEF.md §7.
+
+``reason_cosine`` uses sentence-transformers ``all-MiniLM-L6-v2`` when
+``AI_ONCALL_EVAL_EMBED=transformers`` and the optional dep is installed; the
+bag-of-words fallback runs otherwise so CI never requires a model download.
 """
 
 from __future__ import annotations
 
+import logging
 import math
+import os
 import re
 from collections import Counter
 from typing import Sequence
 
 from ai_oncall.models import RcaReport, ToolCallRecord
+
+logger = logging.getLogger(__name__)
 
 
 def component_match(predicted: RcaReport, expected: RcaReport) -> float:
@@ -20,20 +27,18 @@ def component_match(predicted: RcaReport, expected: RcaReport) -> float:
 
 
 _TOKEN = re.compile(r"[a-z0-9]+")
+_EMBED_MODEL_ID = "sentence-transformers/all-MiniLM-L6-v2"
+_embed_model: object | None = None
+_embed_unavailable_logged = False
 
 
 def _bag(text: str) -> Counter[str]:
     return Counter(_TOKEN.findall(text.lower()))
 
 
-def reason_cosine(predicted: RcaReport, expected: RcaReport) -> float:
-    """Bag-of-words cosine over top-hypothesis reasoning. Threshold 0.5 in CI.
-
-    Real harness substitutes sentence-transformers all-MiniLM-L6-v2 when
-    AI_ONCALL_EVAL_EMBED=transformers and the dep is installed.
-    """
-    p = _bag(predicted.hypotheses[0].reasoning)
-    e = _bag(expected.hypotheses[0].reasoning)
+def _bow_cosine(p_text: str, e_text: str) -> float:
+    p = _bag(p_text)
+    e = _bag(e_text)
     if not p or not e:
         return 0.0
     keys = set(p) | set(e)
@@ -41,6 +46,59 @@ def reason_cosine(predicted: RcaReport, expected: RcaReport) -> float:
     np = math.sqrt(sum(v * v for v in p.values()))
     ne = math.sqrt(sum(v * v for v in e.values()))
     return dot / (np * ne) if np and ne else 0.0
+
+
+def _load_embed_model() -> object | None:
+    """Lazy-load the MiniLM model. Returns None when the dep is absent so
+    callers can fall back without crashing."""
+    global _embed_model, _embed_unavailable_logged
+    if _embed_model is not None:
+        return _embed_model
+    try:
+        from sentence_transformers import SentenceTransformer  # type: ignore[import-not-found]
+    except ImportError:
+        if not _embed_unavailable_logged:
+            logger.warning(
+                "AI_ONCALL_EVAL_EMBED=transformers requested but "
+                "sentence-transformers is not installed; "
+                "install ai-oncall[eval-embeddings] to enable. "
+                "Falling back to bag-of-words cosine."
+            )
+            _embed_unavailable_logged = True
+        return None
+    _embed_model = SentenceTransformer(_EMBED_MODEL_ID)
+    return _embed_model
+
+
+def _embedding_cosine(p_text: str, e_text: str) -> float | None:
+    """Return cosine similarity from MiniLM embeddings, or None when the
+    backend is unavailable so the caller can fall back."""
+    model = _load_embed_model()
+    if model is None:
+        return None
+    vectors = model.encode([p_text, e_text], normalize_embeddings=True)  # type: ignore[attr-defined]
+    p_vec, e_vec = vectors[0], vectors[1]
+    return float(sum(a * b for a, b in zip(p_vec, e_vec)))
+
+
+def reason_cosine(predicted: RcaReport, expected: RcaReport) -> float:
+    """Cosine similarity over top-hypothesis reasoning. Threshold 0.5 in CI.
+
+    With ``AI_ONCALL_EVAL_EMBED=transformers`` and the optional
+    ``[eval-embeddings]`` extra installed, the metric uses
+    ``sentence-transformers/all-MiniLM-L6-v2`` embeddings — matches paraphrases
+    that the bag-of-words fallback misses. Otherwise the bag-of-words cosine
+    runs so CI never blocks on a model download.
+    """
+    p_text = predicted.hypotheses[0].reasoning
+    e_text = expected.hypotheses[0].reasoning
+    if not p_text or not e_text:
+        return 0.0
+    if os.getenv("AI_ONCALL_EVAL_EMBED", "").lower() == "transformers":
+        score = _embedding_cosine(p_text, e_text)
+        if score is not None:
+            return max(0.0, score)
+    return _bow_cosine(p_text, e_text)
 
 
 def trajectory_score(

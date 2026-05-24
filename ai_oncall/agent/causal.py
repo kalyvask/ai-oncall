@@ -1,16 +1,16 @@
-"""Causal hypothesis elimination over the service topology.
+"""Causal hypothesis elimination over the causal dependency graph.
 
 Runs deterministically between PLAN (stage 3) and INVESTIGATE (stage 4).
 Drops hypotheses whose claimed root cause cannot reach the alerting service
-through the observed (or static) service graph; the LLM does not get to spend
-its 8-call budget chasing structurally impossible causes.
+through the causal dependency graph; the LLM does not get to spend its 8-call
+budget chasing structurally impossible causes.
 
 Heuristics, in plain English:
   * The alerting service blames itself? Keep — services do break in place.
-  * The claimed service is unknown to the topology? Keep — be generous when
+  * The claimed service is unknown to the graph? Keep — be generous when
     the graph is incomplete.
   * The claimed service is in the graph but unreachable from the alerting
-    service via the call edges? Drop — there's no causal path.
+    service along the directed call edges? Drop — there's no causal path.
   * Everything got dropped? Rescue the highest-confidence hypothesis so the
     investigator always has something to do.
 
@@ -20,7 +20,6 @@ Claimed services are inferred from the `service` field of each PlannedQuery's
 
 from __future__ import annotations
 
-from collections import defaultdict, deque
 from dataclasses import dataclass
 
 from ai_oncall.models import (
@@ -29,6 +28,7 @@ from ai_oncall.models import (
     PlannedHypothesis,
     TopologySnapshot,
 )
+from ai_oncall.topology.causal_graph import CausalGraph
 
 
 @dataclass(frozen=True)
@@ -44,16 +44,20 @@ class PruneResult:
 
 
 def prune_plan(
-    plan: InvestigationPlan, alert: Alert, topology: TopologySnapshot
+    plan: InvestigationPlan, alert: Alert, topology: TopologySnapshot | CausalGraph
 ) -> PruneResult:
+    graph = (
+        topology
+        if isinstance(topology, CausalGraph)
+        else CausalGraph.from_snapshot(topology)
+    )
     focus = alert.expected_focus_service or alert.service
-    known = {n.service for n in topology.nodes}
-    adjacency = _adjacency(topology)
+    known = graph.known_services()
 
     active: list[PlannedHypothesis] = []
     pruned: list[PrunedHypothesis] = []
     for hypothesis in plan.hypotheses:
-        keep, reason = _judge(hypothesis, focus, known, adjacency)
+        keep, reason = _judge(hypothesis, focus, known, graph)
         if keep:
             active.append(hypothesis)
         else:
@@ -80,7 +84,7 @@ def _judge(
     hypothesis: PlannedHypothesis,
     focus: str,
     known: set[str],
-    adjacency: dict[str, set[str]],
+    graph: CausalGraph,
 ) -> tuple[bool, str]:
     claimed = claimed_services(hypothesis)
     if not claimed:
@@ -95,7 +99,7 @@ def _judge(
         if svc not in known:
             plausible.add(svc)
             continue
-        if _reachable(focus, svc, adjacency):
+        if graph.reachable(focus, svc):
             plausible.add(svc)
         else:
             unreachable.add(svc)
@@ -104,28 +108,6 @@ def _judge(
         return True, ""
     sorted_unreachable = sorted(unreachable)
     return False, (
-        f"no causal path from {focus} to any of {sorted_unreachable} in topology"
+        f"no causal path from {focus} to any of {sorted_unreachable} "
+        f"in the causal dependency graph"
     )
-
-
-def _adjacency(topology: TopologySnapshot) -> dict[str, set[str]]:
-    out: dict[str, set[str]] = defaultdict(set)
-    for edge in topology.edges:
-        out[edge.from_].add(edge.to)
-    return out
-
-
-def _reachable(start: str, target: str, adjacency: dict[str, set[str]]) -> bool:
-    if start == target:
-        return True
-    queue: deque[str] = deque([start])
-    seen = {start}
-    while queue:
-        node = queue.popleft()
-        for nxt in adjacency.get(node, set()):
-            if nxt == target:
-                return True
-            if nxt not in seen:
-                seen.add(nxt)
-                queue.append(nxt)
-    return False
