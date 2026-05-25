@@ -108,7 +108,8 @@ def parse_interaction_payload(body: bytes) -> dict[str, Any]:
     raw_payload = parsed.get("payload", [None])[0]
     if not raw_payload:
         raise ValueError("Slack interaction payload missing 'payload' field")
-    return json.loads(raw_payload)
+    decoded: dict[str, Any] = json.loads(raw_payload)
+    return decoded
 
 
 # --- action handlers -----------------------------------------------------
@@ -242,7 +243,7 @@ def _handle_approve_rollback(
             ),
         )
 
-    target_url = cd_dispatch_url or settings.cd_dispatch_url  # type: ignore[attr-defined]
+    target_url = cd_dispatch_url or settings.cd_dispatch_url
     success, detail = dispatch_rollback(
         action=top.staged_action,
         report_id=report_id,
@@ -342,6 +343,7 @@ def _extract_report_id(payload: dict[str, Any]) -> Optional[str]:
     md = payload.get("message", {}).get("metadata") or {}
     if isinstance(md, dict):
         rid = md.get("event_payload", {}).get("report_id")
-        if rid:
+        if isinstance(rid, str) and rid:
             return rid
-    return payload.get("callback_id")
+    callback_id = payload.get("callback_id")
+    return callback_id if isinstance(callback_id, str) else None

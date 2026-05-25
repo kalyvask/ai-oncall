@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Literal
+from typing import Any, Callable, Literal, cast
 
 from ai_oncall.models import (
     ChangeEvent,
@@ -164,7 +164,11 @@ def get_past_incidents(
     )
 
     # Type-narrow the tier tuple in a way pydantic models accept later.
-    safe_tiers = tuple(t for t in trust_tiers if t in ("local", "aggregated", "verified"))
+    from ai_oncall.learnings.incidents import TrustTier
+
+    safe_tiers: tuple[TrustTier, ...] = tuple(
+        cast(TrustTier, t) for t in trust_tiers if t in ("local", "aggregated", "verified")
+    )
     if not safe_tiers:
         safe_tiers = ("local",)
 

@@ -324,7 +324,7 @@ def _summarize_answer(
         try:
             response = llm.generate(prompt, max_tokens=200)
             text = response.get("text", "") if isinstance(response, dict) else str(response)
-            if text.strip():
+            if isinstance(text, str) and text.strip():
                 return text.strip()
         except Exception:
             logger.exception("thread_qa_summarize_failed")

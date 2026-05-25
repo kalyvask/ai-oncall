@@ -177,8 +177,8 @@ def replay(
             typer.echo(f"  same class        : {diff.same_root_cause_class}")
             typer.echo(f"  confidence delta  : {diff.confidence_delta:+.2f}")
             typer.echo(f"  escalation change : {diff.escalation_changed}")
-            for d in diff.differences:
-                typer.echo(f"   - {d}")
+            for line in diff.differences:
+                typer.echo(f"   - {line}")
         if fail_on_regression and diff.verdict == "regression":
             raise typer.Exit(1)
         return

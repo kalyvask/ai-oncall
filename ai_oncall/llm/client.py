@@ -123,13 +123,13 @@ class AnthropicLlm:
             cost_ceiling_usd if cost_ceiling_usd is not None else settings.cost_ceiling_usd
         )
         self._cumulative_cost_usd = 0.0
-        self._client = None  # lazy
+        self._client: Any = None  # lazy anthropic.Anthropic
 
     @property
     def cumulative_cost_usd(self) -> float:
         return self._cumulative_cost_usd
 
-    def _get_client(self):
+    def _get_client(self) -> Any:
         if self._client is None:
             import anthropic
 

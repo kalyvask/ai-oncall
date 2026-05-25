@@ -17,7 +17,7 @@ unauthenticated. Cap is 60 points (matches BRIEF.md §6).
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Literal
+from typing import Any, Literal
 
 import httpx
 
@@ -77,7 +77,7 @@ class PrometheusClient:
         start = since if since.tzinfo else since.replace(tzinfo=timezone.utc)
         if start >= end:
             start = end - timedelta(minutes=5)
-        params = {
+        params: dict[str, Any] = {
             "query": _promql(metric, self.service_label, service, agg),
             "start": start.timestamp(),
             "end": end.timestamp(),

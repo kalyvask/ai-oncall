@@ -11,7 +11,7 @@ import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from ai_oncall.models import ChangeEvent, TelemetryRecord
 from ai_oncall.storage import _sql
@@ -119,7 +119,7 @@ class SqliteStore(TelemetryStore):
         return [_row_to_record(r) for r in rows]
 
 
-def _row_to_record(row: tuple) -> TelemetryRecord:
+def _row_to_record(row: tuple[Any, ...]) -> TelemetryRecord:
     return TelemetryRecord.model_validate(
         {
             "tenant_id": row[0],
@@ -141,7 +141,7 @@ def _row_to_record(row: tuple) -> TelemetryRecord:
     )
 
 
-def _row_to_change(row: tuple) -> ChangeEvent:
+def _row_to_change(row: tuple[Any, ...]) -> ChangeEvent:
     return ChangeEvent.model_validate(
         {
             "tenant_id": row[0],

@@ -32,7 +32,7 @@ def _registry() -> Registry:
     for path in SCHEMA_DIR.glob("*.json"):
         with path.open(encoding="utf-8") as f:
             schema = json.load(f)
-        resource = Resource(contents=schema, specification=DRAFT202012)
+        resource = Resource(contents=schema, specification=DRAFT202012)  # type: ignore[call-arg]
         if "$id" in schema:
             registry = registry.with_resource(uri=schema["$id"], resource=resource)
         registry = registry.with_resource(uri=path.name, resource=resource)

@@ -35,7 +35,7 @@ import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator, Optional
+from typing import Any, Iterator, Optional
 
 from ai_oncall.learnings.incidents import get_incident
 from ai_oncall.learnings.store import LEARNINGS_PATH, LearningRecord, Reaction
@@ -54,7 +54,7 @@ class FeedbackCase:
     report_id: str
     record: LearningRecord
     correction: Optional[str]
-    payload: dict
+    payload: dict[str, Any]
 
 
 def iter_negative_records(

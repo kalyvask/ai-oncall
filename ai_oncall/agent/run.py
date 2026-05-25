@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 
-from ai_oncall.agent.calibration import calibrate
+from ai_oncall.agent.calibration import CalibrationResult, calibrate
 from ai_oncall.agent.causal import claimed_services, prune_plan
 from ai_oncall.agent.correlation import correlate_changes
 from ai_oncall.agent.investigate import investigate
@@ -107,7 +107,9 @@ def _maybe_post_to_slack(report: RcaReport) -> None:
         )
 
 
-def _apply_calibration(report: RcaReport, store: TelemetryStore) -> tuple[RcaReport, "object"]:
+def _apply_calibration(
+    report: RcaReport, store: TelemetryStore
+) -> tuple[RcaReport, CalibrationResult]:
     """Pull the side-channel signals calibration needs, then run it.
 
     Past incidents come from the typed memory graph (local tier only at this

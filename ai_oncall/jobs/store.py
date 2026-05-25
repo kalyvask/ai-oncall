@@ -50,7 +50,8 @@ class JobRecord(BaseModel):
     updated_at: datetime
 
     def payload(self) -> dict[str, Any]:
-        return json.loads(self.payload_json)
+        data: dict[str, Any] = json.loads(self.payload_json)
+        return data
 
     def result(self) -> Optional[dict[str, Any]]:
         return json.loads(self.result_json) if self.result_json else None

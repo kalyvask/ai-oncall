@@ -117,7 +117,7 @@ class HttpxSlackTransport:
             )
         if resp.status_code != 200:
             raise SlackSendError(f"Slack returned {resp.status_code}: {resp.text[:200]}")
-        body = resp.json()
+        body: dict[str, Any] = resp.json()
         if not body.get("ok"):
             # Slack body errors (e.g. ratelimited, server_error) can also
             # carry Retry-After in the response headers.
@@ -218,7 +218,7 @@ def post_thread_reply(
         blocks=blocks,
         thread_ts=thread_ts,
     )
-    ts = resp.get("ts", "")
+    ts: str = resp.get("ts", "") or ""
     logger.info(
         "slack_thread_reply_posted",
         extra={"channel": channel, "thread_ts": thread_ts, "reply_ts": ts},

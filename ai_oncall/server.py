@@ -22,7 +22,7 @@ import asyncio
 import json
 import re
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, AsyncIterator
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
@@ -51,6 +51,7 @@ from ai_oncall.learnings.store import LearningRecord
 from ai_oncall.learnings import store as learnings_store
 from ai_oncall.llm.client import get_client as get_llm_client
 from ai_oncall.logging_setup import configure
+from ai_oncall.models import RcaReport
 from ai_oncall.settings import settings
 from ai_oncall.storage.factory import make_store
 from ai_oncall.storage.tenancy import tenant_middleware
@@ -60,7 +61,7 @@ configure()
 
 
 @asynccontextmanager
-async def _lifespan(app: FastAPI):
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Start the background worker on startup; stop it on shutdown.
 
     Skipped when AI_ONCALL_DISABLE_WORKER=1 (tests drive the worker
@@ -68,7 +69,7 @@ async def _lifespan(app: FastAPI):
     import os
 
     stop = asyncio.Event()
-    task: asyncio.Task | None = None
+    task: asyncio.Task[None] | None = None
     if os.environ.get("AI_ONCALL_DISABLE_WORKER") != "1":
         task = asyncio.create_task(run_worker(stop))
     app.state.worker_stop = stop
@@ -228,7 +229,7 @@ def metrics_endpoint() -> Response:
 def jobs_list(request: Request, status: str | None = None, limit: int = 50) -> JSONResponse:
     """Tenant-scoped job list. ``?status=failed`` is the dead-letter view."""
     tenant_id: str = request.state.tenant_id
-    valid: tuple = ("pending", "running", "done", "failed")
+    valid: tuple[str, ...] = ("pending", "running", "done", "failed")
     if status is not None and status not in valid:
         raise HTTPException(400, f"status must be one of {valid}")
     rows = list_jobs(tenant_id=tenant_id, status=status, limit=limit)  # type: ignore[arg-type]
@@ -316,7 +317,7 @@ def incident_diff(report_id: str, other_id: str, request: Request) -> JSONRespon
         raise HTTPException(404, f"no incident for id={other_id}")
     ra, rb = a.report(), b.report()
 
-    def _summary(r) -> dict:
+    def _summary(r: RcaReport) -> dict[str, Any]:
         top = r.hypotheses[0] if r.hypotheses else None
         inv = r.investigation
         return {
@@ -437,10 +438,13 @@ def incident_trace(report_id: str, request: Request) -> JSONResponse:
             "report_id": report.report_id,
             "alert": report.alert.model_dump(mode="json"),
             "tool_calls": [
-                tc.model_dump(mode="json") for tc in (report.investigation.tool_calls or [])
-            ]
-            if getattr(report, "investigation", None) is not None
-            else [],
+                tc.model_dump(mode="json")
+                for tc in (
+                    (report.investigation.tool_calls or [])
+                    if report.investigation is not None
+                    else []
+                )
+            ],
             "hypotheses": [h.model_dump(mode="json") for h in report.hypotheses],
         }
     )

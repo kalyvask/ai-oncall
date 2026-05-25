@@ -12,10 +12,13 @@ Auth: bearer token via `AI_ONCALL_LOKI_TOKEN`. Cap is 50 lines per call
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any, Literal, cast
 
 import httpx
 
 from ai_oncall.models import TelemetryRecord
+
+LogSeverity = Literal["trace", "debug", "info", "warn", "error", "fatal"]
 
 LINE_LIMIT = 50
 
@@ -51,7 +54,7 @@ class LokiClient:
         capped = min(limit, LINE_LIMIT)
         end = datetime.now(timezone.utc)
         start = since if since.tzinfo else since.replace(tzinfo=timezone.utc)
-        params = {
+        params: dict[str, Any] = {
             "query": f'{{{self.service_label}="{service}"}} |~ "{_escape_logql(regex)}"',
             "start": int(start.timestamp() * 1e9),
             "end": int(end.timestamp() * 1e9),
@@ -93,7 +96,7 @@ def _escape_logql(regex: str) -> str:
     return regex.replace("\\", "\\\\").replace('"', '\\"')
 
 
-def _normalize_severity(value: str | None) -> str | None:
+def _normalize_severity(value: str | None) -> LogSeverity | None:
     if not value:
         return None
     v = value.lower()
@@ -109,4 +112,5 @@ def _normalize_severity(value: str | None) -> str | None:
         "crit": "fatal",
         "critical": "fatal",
     }
-    return mapping.get(v)
+    result = mapping.get(v)
+    return cast("LogSeverity | None", result)

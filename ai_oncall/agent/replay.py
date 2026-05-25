@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Optional
 
 from ai_oncall.agent.run import run_rca
 from ai_oncall.learnings.incidents import get_incident
@@ -54,8 +54,8 @@ class ReplayDiff:
     escalation_changed: bool
     abstain_changed: bool
     differences: list[str] = field(default_factory=list)
-    original: Optional[dict] = None
-    replayed: Optional[dict] = None
+    original: Optional[dict[str, Any]] = None
+    replayed: Optional[dict[str, Any]] = None
 
 
 @dataclass(frozen=True)
@@ -236,7 +236,7 @@ def _replay_mock_from_report(original: RcaReport) -> MockLlm:
     from ai_oncall.agent.prompts import plan_v1, synthesize_v1
 
     alert = original.alert
-    plan_payload = {
+    plan_payload: dict[str, Any] = {
         "tenant_id": alert.tenant_id,
         "alert_id": alert.alert_id,
         "hypotheses": [

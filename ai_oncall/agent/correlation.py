@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
+from typing import Any
 
 from ai_oncall.models import EvidenceItem, RcaReport
 from ai_oncall.storage.base import TelemetryStore
@@ -30,7 +31,7 @@ def correlate_changes(
     github: GitHubClient | None = None,
 ) -> RcaReport:
     since = report.alert.fired_at - DEPLOY_LOOKBACK
-    seen_changes: dict[str, dict] = {}
+    seen_changes: dict[str, dict[str, Any]] = {}
 
     for hypothesis in report.hypotheses:
         if len(hypothesis.evidence) >= EVIDENCE_MAX_PER_HYPOTHESIS:

@@ -35,7 +35,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Any, Optional
 
 from ai_oncall.models import (
     AbstentionRecord,
@@ -83,14 +83,19 @@ class CalibrationResult:
 def _cold_start(
     *,
     top: Hypothesis,
-    recent_deploys: list[dict],
-    past_incidents: list[dict],
+    recent_deploys: list[dict[str, Any]],
+    past_incidents: list[dict[str, Any]],
     now: datetime,
 ) -> Optional[AbstentionReason]:
     """No deploy in 24h on the implicated service AND no matching past incident."""
     cutoff = now - timedelta(hours=24)
+
+    def _is_recent(deploy: dict[str, Any]) -> bool:
+        ts = _parse_dt(deploy.get("timestamp"))
+        return ts is not None and ts >= cutoff
+
     has_recent_deploy = any(
-        _parse_dt(d.get("timestamp")) and _parse_dt(d["timestamp"]) >= cutoff
+        _is_recent(d)
         for d in recent_deploys
         if d.get("service") == top.root_cause_service or not d.get("service")
     )
@@ -198,8 +203,8 @@ def _two_strong_leads(*, hypotheses: list[Hypothesis], floor: float) -> Optional
 def calibrate(
     report: RcaReport,
     *,
-    recent_deploys: Optional[list[dict]] = None,
-    past_incidents: Optional[list[dict]] = None,
+    recent_deploys: Optional[list[dict[str, Any]]] = None,
+    past_incidents: Optional[list[dict[str, Any]]] = None,
     tool_calls_used: Optional[int] = None,
     confidence_floor: float = DEFAULT_CONFIDENCE_FLOOR,
     convergence_floor: float = DEFAULT_LOW_CONVERGENCE_FLOOR,

@@ -26,9 +26,12 @@ from collections import defaultdict, deque
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable, Iterator
+from typing import TYPE_CHECKING, Iterable, Iterator
 
 from ai_oncall.models import TopologyEdge, TopologyNode, TopologySnapshot
+
+if TYPE_CHECKING:
+    from ai_oncall.models import TelemetryRecord
 
 
 @dataclass(frozen=True)
@@ -143,7 +146,7 @@ def from_yaml(tenant_id: str, path: Path | None = None) -> CausalGraph:
 
 def from_spans(
     tenant_id: str,
-    spans: Iterable[object],  # TelemetryRecord
+    spans: Iterable["TelemetryRecord"],
     *,
     captured_at: datetime,
     window_minutes: int = 10,
@@ -154,6 +157,6 @@ def from_spans(
         tenant_id,
         spans,
         captured_at=captured_at,
-        window_minutes=window_minutes,  # type: ignore[arg-type]
+        window_minutes=window_minutes,
     )
     return CausalGraph.from_snapshot(snapshot)

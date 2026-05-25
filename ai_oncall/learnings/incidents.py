@@ -25,7 +25,7 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Iterator, Literal, Optional
+from typing import Any, Iterator, Literal, Optional
 
 from pydantic import BaseModel
 
@@ -334,7 +334,7 @@ def list_root_cause_classes(
     service: str,
     trust_tiers: tuple[TrustTier, ...] = ("local",),
     db_path: Path | None = None,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Return graph rows for a (tenant, service), filtered by trust tier."""
     if not trust_tiers:
         return []
