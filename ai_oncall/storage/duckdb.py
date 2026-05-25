@@ -30,13 +30,28 @@ class DuckDbStore(TelemetryStore):
         rows = []
         for r in records:
             if r.tenant_id != tenant_id:
-                raise ValueError(f"record tenant_id={r.tenant_id!r} does not match scope {tenant_id!r}")
-            rows.append((
-                r.tenant_id, r.kind, r.service, r.timestamp.isoformat(),
-                r.trace_id, r.span_id, r.parent_span_id, r.name,
-                r.duration_ms, r.status, r.metric_value, r.metric_unit,
-                r.severity, r.body, json.dumps(r.attributes),
-            ))
+                raise ValueError(
+                    f"record tenant_id={r.tenant_id!r} does not match scope {tenant_id!r}"
+                )
+            rows.append(
+                (
+                    r.tenant_id,
+                    r.kind,
+                    r.service,
+                    r.timestamp.isoformat(),
+                    r.trace_id,
+                    r.span_id,
+                    r.parent_span_id,
+                    r.name,
+                    r.duration_ms,
+                    r.status,
+                    r.metric_value,
+                    r.metric_unit,
+                    r.severity,
+                    r.body,
+                    json.dumps(r.attributes),
+                )
+            )
         self._conn.executemany(_sql.INSERT_TELEMETRY, rows)
 
     def query_metric(
@@ -71,48 +86,86 @@ class DuckDbStore(TelemetryStore):
             "FROM telemetry WHERE tenant_id = ? AND service = ? AND kind = 'log' "
             "AND timestamp >= ? AND regexp_matches(body, ?) ORDER BY timestamp DESC LIMIT ?"
         )
-        rows = self._conn.execute(sql, [tenant_id, service, since.isoformat(), regex, limit]).fetchall()
+        rows = self._conn.execute(
+            sql, [tenant_id, service, since.isoformat(), regex, limit]
+        ).fetchall()
         out: list[TelemetryRecord] = []
         for row in rows:
-            out.append(TelemetryRecord.model_validate({
-                "tenant_id": row[0], "kind": row[1], "service": row[2],
-                "timestamp": row[3], "trace_id": row[4], "span_id": row[5],
-                "parent_span_id": row[6], "name": row[7], "duration_ms": row[8],
-                "status": row[9], "metric_value": row[10], "metric_unit": row[11],
-                "severity": row[12], "body": row[13],
-                "attributes": json.loads(row[14]) if row[14] else {},
-            }))
+            out.append(
+                TelemetryRecord.model_validate(
+                    {
+                        "tenant_id": row[0],
+                        "kind": row[1],
+                        "service": row[2],
+                        "timestamp": row[3],
+                        "trace_id": row[4],
+                        "span_id": row[5],
+                        "parent_span_id": row[6],
+                        "name": row[7],
+                        "duration_ms": row[8],
+                        "status": row[9],
+                        "metric_value": row[10],
+                        "metric_unit": row[11],
+                        "severity": row[12],
+                        "body": row[13],
+                        "attributes": json.loads(row[14]) if row[14] else {},
+                    }
+                )
+            )
         return out
 
-    def recent_deploys(
-        self, tenant_id: str, service: str, since: datetime
-    ) -> list[ChangeEvent]:
-        rows = self._conn.execute(_sql.QUERY_RECENT_DEPLOYS, [tenant_id, service, since.isoformat()]).fetchall()
+    def recent_deploys(self, tenant_id: str, service: str, since: datetime) -> list[ChangeEvent]:
+        rows = self._conn.execute(
+            _sql.QUERY_RECENT_DEPLOYS, [tenant_id, service, since.isoformat()]
+        ).fetchall()
         out: list[ChangeEvent] = []
         for row in rows:
-            out.append(ChangeEvent.model_validate({
-                "tenant_id": row[0], "event_id": row[1], "service": row[2],
-                "kind": row[3], "timestamp": row[4], "actor": row[5],
-                "title": row[6], "url": row[7], "sha": row[8],
-                "patch_excerpt": row[9],
-                "files_changed": json.loads(row[10]) if row[10] else [],
-            }))
+            out.append(
+                ChangeEvent.model_validate(
+                    {
+                        "tenant_id": row[0],
+                        "event_id": row[1],
+                        "service": row[2],
+                        "kind": row[3],
+                        "timestamp": row[4],
+                        "actor": row[5],
+                        "title": row[6],
+                        "url": row[7],
+                        "sha": row[8],
+                        "patch_excerpt": row[9],
+                        "files_changed": json.loads(row[10]) if row[10] else [],
+                    }
+                )
+            )
         return out
 
     def query_spans(
         self, tenant_id: str, since: datetime, limit: int = 5000
     ) -> list[TelemetryRecord]:
-        rows = self._conn.execute(_sql.QUERY_SPANS, [tenant_id, since.isoformat(), limit]).fetchall()
+        rows = self._conn.execute(
+            _sql.QUERY_SPANS, [tenant_id, since.isoformat(), limit]
+        ).fetchall()
         out: list[TelemetryRecord] = []
         for row in rows:
-            out.append(TelemetryRecord.model_validate({
-                "tenant_id": row[0], "kind": row[1], "service": row[2],
-                "timestamp": row[3], "trace_id": row[4], "span_id": row[5],
-                "parent_span_id": row[6], "name": row[7], "duration_ms": row[8],
-                "status": row[9], "metric_value": row[10], "metric_unit": row[11],
-                "severity": row[12], "body": row[13],
-                "attributes": json.loads(row[14]) if row[14] else {},
-            }))
+            out.append(
+                TelemetryRecord.model_validate(
+                    {
+                        "tenant_id": row[0],
+                        "kind": row[1],
+                        "service": row[2],
+                        "timestamp": row[3],
+                        "trace_id": row[4],
+                        "span_id": row[5],
+                        "parent_span_id": row[6],
+                        "name": row[7],
+                        "duration_ms": row[8],
+                        "status": row[9],
+                        "metric_value": row[10],
+                        "metric_unit": row[11],
+                        "severity": row[12],
+                        "body": row[13],
+                        "attributes": json.loads(row[14]) if row[14] else {},
+                    }
+                )
+            )
         return out
-
-

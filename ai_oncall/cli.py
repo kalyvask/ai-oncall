@@ -42,9 +42,13 @@ def validate_fixture(schema: str, path: Path) -> None:
 
 @app.command()
 def rca(
-    alert_path: Path = typer.Argument(..., help="Path to a JSON alert envelope (e.g. fixtures/synthetic_alerts/checkout_regression.json)"),
+    alert_path: Path = typer.Argument(
+        ...,
+        help="Path to a JSON alert envelope (e.g. fixtures/synthetic_alerts/checkout_regression.json)",
+    ),
     fixture_report: Path | None = typer.Option(
-        None, "--fixture-report",
+        None,
+        "--fixture-report",
         help="Path to a canned RcaReport JSON; the MockLlm replays it. Use until live LLM keys are wired.",
     ),
 ) -> None:
@@ -65,25 +69,51 @@ def rca(
         )
     report_text = fixture_report.read_text(encoding="utf-8")
     plan_payload = {
-        "tenant_id": alert.tenant_id, "alert_id": alert.alert_id,
+        "tenant_id": alert.tenant_id,
+        "alert_id": alert.alert_id,
         "hypotheses": [
-            {"statement": "default", "confidence": 0.5, "queries": [
-                {"tool": "get_topology", "input": {"service": alert.service, "depth": 2}},
-                {"tool": "get_runbook", "input": {"service": alert.service}},
-                {"tool": "get_recent_deploys", "input": {"service": alert.service, "since": alert.fired_at.isoformat()}},
-            ]},
-            {"statement": "alt_a", "confidence": 0.3, "queries": [
-                {"tool": "get_past_incidents", "input": {"service": alert.service, "k": 3}},
-            ]},
-            {"statement": "alt_b", "confidence": 0.2, "queries": [
-                {"tool": "get_runbook", "input": {"service": alert.service}},
-            ]},
+            {
+                "statement": "default",
+                "confidence": 0.5,
+                "queries": [
+                    {"tool": "get_topology", "input": {"service": alert.service, "depth": 2}},
+                    {"tool": "get_runbook", "input": {"service": alert.service}},
+                    {
+                        "tool": "get_recent_deploys",
+                        "input": {"service": alert.service, "since": alert.fired_at.isoformat()},
+                    },
+                ],
+            },
+            {
+                "statement": "alt_a",
+                "confidence": 0.3,
+                "queries": [
+                    {"tool": "get_past_incidents", "input": {"service": alert.service, "k": 3}},
+                ],
+            },
+            {
+                "statement": "alt_b",
+                "confidence": 0.2,
+                "queries": [
+                    {"tool": "get_runbook", "input": {"service": alert.service}},
+                ],
+            },
         ],
     }
-    mock = MockLlm(fixtures={
-        plan_v1.SYSTEM_PROMPT[:60]: {"text": json.dumps(plan_payload), "tokens_in": 800, "tokens_out": 200},
-        synthesize_v1.SYSTEM_PROMPT[:60]: {"text": report_text, "tokens_in": 4000, "tokens_out": 600},
-    })
+    mock = MockLlm(
+        fixtures={
+            plan_v1.SYSTEM_PROMPT[:60]: {
+                "text": json.dumps(plan_payload),
+                "tokens_in": 800,
+                "tokens_out": 200,
+            },
+            synthesize_v1.SYSTEM_PROMPT[:60]: {
+                "text": report_text,
+                "tokens_in": 4000,
+                "tokens_out": 600,
+            },
+        }
+    )
     report = run_rca(alert, make_store(), mock)
     typer.echo(report.model_dump_json(by_alias=True, exclude_none=True, indent=2))
 
@@ -218,7 +248,9 @@ def feedback_export(
     cases = export_cases(output_dir, tenant_id=tenant_id, overwrite=overwrite)
     typer.echo(f"wrote {len(cases)} fixture cases to {output_dir}")
     for case in cases[:10]:
-        typer.echo(f"  - {case.case_id}: agent claimed `{case.payload['expected']['wrong_root_cause_service']}`")
+        typer.echo(
+            f"  - {case.case_id}: agent claimed `{case.payload['expected']['wrong_root_cause_service']}`"
+        )
     if len(cases) > 10:
         typer.echo(f"  ... and {len(cases) - 10} more")
 

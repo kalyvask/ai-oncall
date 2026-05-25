@@ -26,10 +26,20 @@ REPO = Path(__file__).resolve().parents[2]
 
 
 def _mock_with(plan_payload: dict, report_payload: dict) -> MockLlm:
-    return MockLlm(fixtures={
-        plan_v1.SYSTEM_PROMPT[:60]: {"text": json.dumps(plan_payload), "tokens_in": 800, "tokens_out": 200},
-        synthesize_v1.SYSTEM_PROMPT[:60]: {"text": json.dumps(report_payload), "tokens_in": 4000, "tokens_out": 600},
-    })
+    return MockLlm(
+        fixtures={
+            plan_v1.SYSTEM_PROMPT[:60]: {
+                "text": json.dumps(plan_payload),
+                "tokens_in": 800,
+                "tokens_out": 200,
+            },
+            synthesize_v1.SYSTEM_PROMPT[:60]: {
+                "text": json.dumps(report_payload),
+                "tokens_in": 4000,
+                "tokens_out": 600,
+            },
+        }
+    )
 
 
 def test_full_loop_produces_schema_valid_report(tmp_path) -> None:
@@ -44,16 +54,34 @@ def test_full_loop_produces_schema_valid_report(tmp_path) -> None:
         "tenant_id": alert.tenant_id,
         "alert_id": alert.alert_id,
         "hypotheses": [
-            {"statement": "payment regression", "confidence": 0.7, "queries": [
-                {"tool": "get_topology", "input": {"service": "checkout", "depth": 2}},
-                {"tool": "get_recent_deploys", "input": {"service": "payment", "since": "2026-04-24T03:14:00Z"}},
-            ]},
-            {"statement": "checkout self", "confidence": 0.2, "queries": [
-                {"tool": "get_recent_deploys", "input": {"service": "checkout", "since": "2026-04-24T03:14:00Z"}},
-            ]},
-            {"statement": "external stripe", "confidence": 0.1, "queries": [
-                {"tool": "get_runbook", "input": {"service": "payment"}},
-            ]},
+            {
+                "statement": "payment regression",
+                "confidence": 0.7,
+                "queries": [
+                    {"tool": "get_topology", "input": {"service": "checkout", "depth": 2}},
+                    {
+                        "tool": "get_recent_deploys",
+                        "input": {"service": "payment", "since": "2026-04-24T03:14:00Z"},
+                    },
+                ],
+            },
+            {
+                "statement": "checkout self",
+                "confidence": 0.2,
+                "queries": [
+                    {
+                        "tool": "get_recent_deploys",
+                        "input": {"service": "checkout", "since": "2026-04-24T03:14:00Z"},
+                    },
+                ],
+            },
+            {
+                "statement": "external stripe",
+                "confidence": 0.1,
+                "queries": [
+                    {"tool": "get_runbook", "input": {"service": "payment"}},
+                ],
+            },
         ],
     }
 
@@ -70,6 +98,10 @@ def test_full_loop_produces_schema_valid_report(tmp_path) -> None:
     assert len(report.investigation.tool_calls) == 4
     # Every recorded tool call resolves to one of the 6 tool names.
     assert {tc.tool for tc in report.investigation.tool_calls} <= {
-        "query_metrics", "query_logs", "get_recent_deploys",
-        "get_runbook", "get_topology", "get_past_incidents",
+        "query_metrics",
+        "query_logs",
+        "get_recent_deploys",
+        "get_runbook",
+        "get_topology",
+        "get_past_incidents",
     }

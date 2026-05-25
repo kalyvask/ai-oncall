@@ -120,9 +120,7 @@ def _cold_start(
     )
 
 
-def _confidence_floor(
-    *, top: Hypothesis, floor: float
-) -> Optional[AbstentionReason]:
+def _confidence_floor(*, top: Hypothesis, floor: float) -> Optional[AbstentionReason]:
     if top.confidence >= floor:
         return None
     return AbstentionReason(
@@ -163,9 +161,7 @@ def _budget_exhausted(
     )
 
 
-def _two_strong_leads(
-    *, hypotheses: list[Hypothesis], floor: float
-) -> Optional[AbstentionReason]:
+def _two_strong_leads(*, hypotheses: list[Hypothesis], floor: float) -> Optional[AbstentionReason]:
     if len(hypotheses) < 2:
         return None
     sorted_h = sorted(hypotheses, key=lambda h: -h.confidence)

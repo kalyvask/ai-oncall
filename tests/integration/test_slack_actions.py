@@ -114,9 +114,10 @@ def _propose_report(tmp_dbs) -> RcaReport:
     report = _report()
     # Force tier=propose so the rollback button is gated correctly.
     h = report.hypotheses[0]
-    new_action = (h.staged_action or StagedAction(
-        kind="rollback", service=h.root_cause_service, tier="propose"
-    )).model_copy(update={"tier": "propose", "kind": "rollback"})
+    new_action = (
+        h.staged_action
+        or StagedAction(kind="rollback", service=h.root_cause_service, tier="propose")
+    ).model_copy(update={"tier": "propose", "kind": "rollback"})
     new_h = h.model_copy(update={"staged_action": new_action})
     report = report.model_copy(update={"hypotheses": [new_h, *report.hypotheses[1:]]})
     save_incident(report)
@@ -153,8 +154,14 @@ def test_approve_rollback_writes_audit_row(tmp_dbs) -> None:
 
     learnings_path = learnings_store.LEARNINGS_PATH
     assert learnings_path.exists(), "audit log was never written"
-    lines = [line for line in learnings_path.read_text(encoding="utf-8").splitlines() if line.strip()]
-    audit_rows = [json.loads(line) for line in lines if '"kind": "slack_action"' in line or '"kind":"slack_action"' in line]
+    lines = [
+        line for line in learnings_path.read_text(encoding="utf-8").splitlines() if line.strip()
+    ]
+    audit_rows = [
+        json.loads(line)
+        for line in lines
+        if '"kind": "slack_action"' in line or '"kind":"slack_action"' in line
+    ]
     assert audit_rows, "no slack_action audit row found"
     row = audit_rows[-1]
     assert row["action_id"] == "approve_rollback"

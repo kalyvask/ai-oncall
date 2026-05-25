@@ -165,9 +165,7 @@ def test_harness_rejects_missing_data_dir(capsys) -> None:
 
 
 def test_harness_reports_data_dir_not_found(tmp_path: Path, capsys) -> None:
-    rc = harness_main(
-        ["--track", "openrca", "--data-dir", str(tmp_path / "does_not_exist")]
-    )
+    rc = harness_main(["--track", "openrca", "--data-dir", str(tmp_path / "does_not_exist")])
     assert rc == 2
     err = capsys.readouterr().err
     assert "openrca data dir" in err

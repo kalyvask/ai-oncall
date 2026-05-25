@@ -33,9 +33,16 @@ def _span(
     when: datetime = T0,
 ) -> TelemetryRecord:
     return TelemetryRecord(
-        tenant_id=TENANT, kind="trace", service=service, timestamp=when,
-        trace_id="t1", span_id=span_id, parent_span_id=parent,
-        name=f"{service}.handler", duration_ms=duration_ms, status=status,  # type: ignore[arg-type]
+        tenant_id=TENANT,
+        kind="trace",
+        service=service,
+        timestamp=when,
+        trace_id="t1",
+        span_id=span_id,
+        parent_span_id=parent,
+        name=f"{service}.handler",
+        duration_ms=duration_ms,
+        status=status,  # type: ignore[arg-type]
     )
 
 
@@ -115,8 +122,14 @@ def test_query_spans_filters_by_tenant(tmp_path) -> None:
     store.write_records("alpha", [_span(service="x", span_id="A")])
     bravo_spans = [
         TelemetryRecord(
-            tenant_id="bravo", kind="trace", service="x", timestamp=T0,
-            span_id="B", trace_id="t1", duration_ms=10.0, status="ok",
+            tenant_id="bravo",
+            kind="trace",
+            service="x",
+            timestamp=T0,
+            span_id="B",
+            trace_id="t1",
+            duration_ms=10.0,
+            status="ok",
         )
     ]
     store.write_records("bravo", bravo_spans)
@@ -151,9 +164,12 @@ def test_build_falls_back_to_yaml_when_store_empty(tmp_path) -> None:
 def test_build_prefers_live_when_spans_exist(tmp_path) -> None:
     store = SqliteStore(path=str(tmp_path / "app.sqlite"))
     now = datetime.now(timezone.utc)
-    store.write_records(TENANT, [
-        _span(service="alpha-only-svc", span_id="A", when=now),
-    ])
+    store.write_records(
+        TENANT,
+        [
+            _span(service="alpha-only-svc", span_id="A", when=now),
+        ],
+    )
     snap = build(TENANT, store, now=now)
     services = {n.service for n in snap.nodes}
     assert services == {"alpha-only-svc"}

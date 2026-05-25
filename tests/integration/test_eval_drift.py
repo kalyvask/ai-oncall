@@ -25,7 +25,9 @@ from evals.harness import (
 
 def _case(case_id: str, family: str, **metrics: float) -> CaseResult:
     return CaseResult(
-        case_id=case_id, family=family, difficulty="easy",
+        case_id=case_id,
+        family=family,
+        difficulty="easy",
         metrics={
             "component_match": metrics.get("component_match", 1.0),
             "reason_cosine": metrics.get("reason_cosine", 1.0),
@@ -82,14 +84,20 @@ def test_regression_detected_in_global_metric() -> None:
 
 def test_regression_detected_per_family_only() -> None:
     """Even if global is fine, a per-family drop should still be flagged."""
-    base = to_report("synthetic", [
-        _case("a", "good", component_match=1.0),
-        _case("b", "bad", component_match=1.0),
-    ])
-    cur = to_report("synthetic", [
-        _case("a", "good", component_match=1.0),
-        _case("b", "bad", component_match=0.5),  # only "bad" family regressed
-    ])
+    base = to_report(
+        "synthetic",
+        [
+            _case("a", "good", component_match=1.0),
+            _case("b", "bad", component_match=1.0),
+        ],
+    )
+    cur = to_report(
+        "synthetic",
+        [
+            _case("a", "good", component_match=1.0),
+            _case("b", "bad", component_match=0.5),  # only "bad" family regressed
+        ],
+    )
     regressions = diff_against_baseline(cur, base)
     scopes = {(r.scope, r.metric) for r in regressions}
     assert ("bad", "component_match") in scopes
@@ -98,14 +106,18 @@ def test_regression_detected_per_family_only() -> None:
 
 def test_drop_under_threshold_is_not_a_regression() -> None:
     base = to_report("synthetic", [_case("a", "x", component_match=1.0)])
-    cur = to_report("synthetic", [_case("a", "x", component_match=1.0 - REGRESSION_THRESHOLD + 0.001)])
+    cur = to_report(
+        "synthetic", [_case("a", "x", component_match=1.0 - REGRESSION_THRESHOLD + 0.001)]
+    )
     assert diff_against_baseline(cur, base) == []
 
 
 def test_drop_at_threshold_boundary_is_a_regression() -> None:
     base = to_report("synthetic", [_case("a", "x", component_match=1.0)])
     # exactly threshold + epsilon below
-    cur = to_report("synthetic", [_case("a", "x", component_match=1.0 - REGRESSION_THRESHOLD - 0.001)])
+    cur = to_report(
+        "synthetic", [_case("a", "x", component_match=1.0 - REGRESSION_THRESHOLD - 0.001)]
+    )
     regressions = diff_against_baseline(cur, base)
     assert any(r.scope == "global" and r.metric == "component_match" for r in regressions)
 
@@ -169,9 +181,7 @@ def test_cli_baseline_fails_when_artificially_regressed(tmp_path: Path) -> None:
     }
     # If current is already at 1.0 there is nothing to drop; force a delta by
     # setting baseline higher than the legal max via a hand-crafted file.
-    inflated["aggregates_global"] = {
-        k: v + 0.5 for k, v in payload["aggregates_global"].items()
-    }
+    inflated["aggregates_global"] = {k: v + 0.5 for k, v in payload["aggregates_global"].items()}
     inflated["aggregates_by_family"] = {
         family: {k: v + 0.5 for k, v in metrics.items()}
         for family, metrics in payload["aggregates_by_family"].items()

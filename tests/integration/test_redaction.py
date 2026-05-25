@@ -123,10 +123,12 @@ def test_raw_secrets_blocked_does_not_refuse_email_only(monkeypatch) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
     llm = AnthropicLlm(model_alias="claude-haiku", cost_ceiling_usd=10.0)
     llm._client = NS(
-        messages=NS(create=lambda **kw: NS(
-            content=[NS(type="text", text='{"ok": true}')],
-            usage=NS(input_tokens=5, output_tokens=2),
-        ))
+        messages=NS(
+            create=lambda **kw: NS(
+                content=[NS(type="text", text='{"ok": true}')],
+                usage=NS(input_tokens=5, output_tokens=2),
+            )
+        )
     )
     result = llm.generate("User alex@example.com saw an error.")
     assert result["text"] == '{"ok": true}'

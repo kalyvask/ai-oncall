@@ -21,13 +21,15 @@ def plan(
     *,
     tracer: LlmTracer | None = None,
 ) -> InvestigationPlan:
-    prompt = plan_v1.SYSTEM_PROMPT + "\n\n" + plan_v1.USER_PROMPT_TEMPLATE.format(
-        alert_json=alert.model_dump_json(by_alias=True, exclude_none=True),
+    prompt = (
+        plan_v1.SYSTEM_PROMPT
+        + "\n\n"
+        + plan_v1.USER_PROMPT_TEMPLATE.format(
+            alert_json=alert.model_dump_json(by_alias=True, exclude_none=True),
+        )
     )
     if tracer is not None:
-        response = tracer.call(
-            llm, prompt, stage="plan", prompt_version="plan_v1", max_tokens=1024
-        )
+        response = tracer.call(llm, prompt, stage="plan", prompt_version="plan_v1", max_tokens=1024)
     else:
         response = llm.generate(prompt, max_tokens=1024)
     text = response.get("text", "").strip()

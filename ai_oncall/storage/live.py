@@ -60,9 +60,7 @@ class LiveStore(TelemetryStore):
     ) -> list[TelemetryRecord]:
         return self._loki.query_logs(tenant_id, service, since, regex, limit)
 
-    def recent_deploys(
-        self, tenant_id: str, service: str, since: datetime
-    ) -> list[ChangeEvent]:
+    def recent_deploys(self, tenant_id: str, service: str, since: datetime) -> list[ChangeEvent]:
         return self._deploys.recent_deploys(tenant_id, service, since)
 
     def query_spans(

@@ -91,11 +91,7 @@ def _classify_tier(
     is_page: bool,
     policy: ActionPolicy = DEFAULT_POLICY,
 ) -> ActionTier:
-    if (
-        is_page
-        and confidence >= AUTO_THRESHOLD
-        and policy.can_auto(kind)
-    ):
+    if is_page and confidence >= AUTO_THRESHOLD and policy.can_auto(kind):
         return "auto"
     if confidence >= PROPOSE_THRESHOLD and policy.can_propose(kind):
         return "propose"
@@ -113,4 +109,6 @@ def _rationale(kind: ActionKind, tier: ActionTier, hypothesis: Hypothesis) -> st
             f"confidence {hypothesis.confidence:.2f} >= {PROPOSE_THRESHOLD:.2f}; "
             f"awaiting human approval before {kind}."
         )
-    return f"confidence {hypothesis.confidence:.2f} below propose threshold; surfacing as advice only."
+    return (
+        f"confidence {hypothesis.confidence:.2f} below propose threshold; surfacing as advice only."
+    )

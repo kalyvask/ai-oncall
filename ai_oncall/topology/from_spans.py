@@ -73,13 +73,15 @@ def from_spans(
         durations = sorted(s.duration_ms for s in bucket if s.duration_ms is not None)
         p99 = _percentile(durations, 0.99) if durations else None
         edges.append(
-            TopologyEdge.model_validate({
-                "from": src,
-                "to": dst,
-                "calls_per_min": n / minutes,
-                "error_rate": errors / n if n else 0.0,
-                "p99_ms": p99,
-            })
+            TopologyEdge.model_validate(
+                {
+                    "from": src,
+                    "to": dst,
+                    "calls_per_min": n / minutes,
+                    "error_rate": errors / n if n else 0.0,
+                    "p99_ms": p99,
+                }
+            )
         )
 
     return TopologySnapshot(

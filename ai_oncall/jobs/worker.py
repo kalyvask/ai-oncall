@@ -12,7 +12,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Any
 
 from ai_oncall.agent.run import run_rca
 from ai_oncall.ingest.alerts import receive

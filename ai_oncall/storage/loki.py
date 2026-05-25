@@ -98,8 +98,15 @@ def _normalize_severity(value: str | None) -> str | None:
         return None
     v = value.lower()
     mapping = {
-        "trace": "trace", "debug": "debug", "info": "info",
-        "warn": "warn", "warning": "warn", "error": "error",
-        "err": "error", "fatal": "fatal", "crit": "fatal", "critical": "fatal",
+        "trace": "trace",
+        "debug": "debug",
+        "info": "info",
+        "warn": "warn",
+        "warning": "warn",
+        "error": "error",
+        "err": "error",
+        "fatal": "fatal",
+        "crit": "fatal",
+        "critical": "fatal",
     }
     return mapping.get(v)

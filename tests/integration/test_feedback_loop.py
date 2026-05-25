@@ -53,18 +53,42 @@ def test_iter_negative_records_returns_only_negatives(tmp_dbs):
     save_incident(report)
     learnings_path = learnings_store.LEARNINGS_PATH
 
-    _append_record(learnings_path, LearningRecord(
-        tenant_id="demo", report_id=report.report_id, alert_title="x", service="a",
-        top_hypothesis="b", confidence=0.9, reaction="thumbs_up",
-    ))
-    _append_record(learnings_path, LearningRecord(
-        tenant_id="demo", report_id=report.report_id, alert_title="x", service="a",
-        top_hypothesis="b", confidence=0.9, reaction="thumbs_down",
-    ))
-    _append_record(learnings_path, LearningRecord(
-        tenant_id="demo", report_id=report.report_id, alert_title="x", service="a",
-        top_hypothesis="b", confidence=0.9, reaction="wrong_root_cause",
-    ))
+    _append_record(
+        learnings_path,
+        LearningRecord(
+            tenant_id="demo",
+            report_id=report.report_id,
+            alert_title="x",
+            service="a",
+            top_hypothesis="b",
+            confidence=0.9,
+            reaction="thumbs_up",
+        ),
+    )
+    _append_record(
+        learnings_path,
+        LearningRecord(
+            tenant_id="demo",
+            report_id=report.report_id,
+            alert_title="x",
+            service="a",
+            top_hypothesis="b",
+            confidence=0.9,
+            reaction="thumbs_down",
+        ),
+    )
+    _append_record(
+        learnings_path,
+        LearningRecord(
+            tenant_id="demo",
+            report_id=report.report_id,
+            alert_title="x",
+            service="a",
+            top_hypothesis="b",
+            confidence=0.9,
+            reaction="wrong_root_cause",
+        ),
+    )
 
     records = list(iter_negative_records(learnings_path=learnings_path))
     assert len(records) == 2
@@ -73,14 +97,30 @@ def test_iter_negative_records_returns_only_negatives(tmp_dbs):
 
 def test_iter_negative_records_filters_by_tenant(tmp_dbs):
     learnings_path = learnings_store.LEARNINGS_PATH
-    _append_record(learnings_path, LearningRecord(
-        tenant_id="A", report_id="r1", alert_title="x", service="a",
-        top_hypothesis="b", confidence=0.9, reaction="thumbs_down",
-    ))
-    _append_record(learnings_path, LearningRecord(
-        tenant_id="B", report_id="r2", alert_title="x", service="a",
-        top_hypothesis="b", confidence=0.9, reaction="thumbs_down",
-    ))
+    _append_record(
+        learnings_path,
+        LearningRecord(
+            tenant_id="A",
+            report_id="r1",
+            alert_title="x",
+            service="a",
+            top_hypothesis="b",
+            confidence=0.9,
+            reaction="thumbs_down",
+        ),
+    )
+    _append_record(
+        learnings_path,
+        LearningRecord(
+            tenant_id="B",
+            report_id="r2",
+            alert_title="x",
+            service="a",
+            top_hypothesis="b",
+            confidence=0.9,
+            reaction="thumbs_down",
+        ),
+    )
 
     only_a = list(iter_negative_records(learnings_path=learnings_path, tenant_id="A"))
     assert [r.report_id for r in only_a] == ["r1"]
@@ -93,10 +133,18 @@ def test_iter_negative_records_skips_malformed_lines(tmp_dbs):
     learnings_path.parent.mkdir(parents=True, exist_ok=True)
     with learnings_path.open("a", encoding="utf-8") as f:
         f.write('{"kind":"slack_action","report_id":"r1","action_id":"approve_rollback"}\n')
-    _append_record(learnings_path, LearningRecord(
-        tenant_id="demo", report_id="r2", alert_title="x", service="a",
-        top_hypothesis="b", confidence=0.9, reaction="thumbs_down",
-    ))
+    _append_record(
+        learnings_path,
+        LearningRecord(
+            tenant_id="demo",
+            report_id="r2",
+            alert_title="x",
+            service="a",
+            top_hypothesis="b",
+            confidence=0.9,
+            reaction="thumbs_down",
+        ),
+    )
 
     records = list(iter_negative_records(learnings_path=learnings_path))
     assert len(records) == 1
@@ -108,8 +156,13 @@ def test_iter_negative_records_skips_malformed_lines(tmp_dbs):
 
 def test_build_case_returns_none_when_incident_missing(tmp_dbs):
     record = LearningRecord(
-        tenant_id="demo", report_id="rpt_missing", alert_title="x", service="a",
-        top_hypothesis="b", confidence=0.9, reaction="thumbs_down",
+        tenant_id="demo",
+        report_id="rpt_missing",
+        alert_title="x",
+        service="a",
+        top_hypothesis="b",
+        confidence=0.9,
+        reaction="thumbs_down",
     )
     assert build_case(record) is None
 
@@ -119,8 +172,10 @@ def test_build_case_carries_alert_and_wrong_claim(tmp_dbs):
     save_incident(report)
 
     record = LearningRecord(
-        tenant_id=report.tenant_id, report_id=report.report_id,
-        alert_title=report.alert.title, service=report.alert.service,
+        tenant_id=report.tenant_id,
+        report_id=report.report_id,
+        alert_title=report.alert.title,
+        service=report.alert.service,
         top_hypothesis=report.hypotheses[0].root_cause_service,
         confidence=report.hypotheses[0].confidence,
         reaction="wrong_root_cause",
@@ -145,13 +200,18 @@ def test_export_cases_writes_one_file_per_negative(tmp_dbs):
     learnings_path = learnings_store.LEARNINGS_PATH
 
     for reaction in ("thumbs_down", "wrong_root_cause"):
-        _append_record(learnings_path, LearningRecord(
-            tenant_id=report.tenant_id, report_id=report.report_id,
-            alert_title=report.alert.title, service=report.alert.service,
-            top_hypothesis=report.hypotheses[0].root_cause_service,
-            confidence=report.hypotheses[0].confidence,
-            reaction=reaction,
-        ))
+        _append_record(
+            learnings_path,
+            LearningRecord(
+                tenant_id=report.tenant_id,
+                report_id=report.report_id,
+                alert_title=report.alert.title,
+                service=report.alert.service,
+                top_hypothesis=report.hypotheses[0].root_cause_service,
+                confidence=report.hypotheses[0].confidence,
+                reaction=reaction,
+            ),
+        )
 
     out_dir = tmp_dbs / "cases"
     written = export_cases(out_dir, learnings_path=learnings_path)
@@ -167,13 +227,18 @@ def test_export_cases_skips_existing_unless_overwrite(tmp_dbs):
     report = _report()
     save_incident(report)
     learnings_path = learnings_store.LEARNINGS_PATH
-    _append_record(learnings_path, LearningRecord(
-        tenant_id=report.tenant_id, report_id=report.report_id,
-        alert_title=report.alert.title, service=report.alert.service,
-        top_hypothesis=report.hypotheses[0].root_cause_service,
-        confidence=report.hypotheses[0].confidence,
-        reaction="thumbs_down",
-    ))
+    _append_record(
+        learnings_path,
+        LearningRecord(
+            tenant_id=report.tenant_id,
+            report_id=report.report_id,
+            alert_title=report.alert.title,
+            service=report.alert.service,
+            top_hypothesis=report.hypotheses[0].root_cause_service,
+            confidence=report.hypotheses[0].confidence,
+            reaction="thumbs_down",
+        ),
+    )
 
     out_dir = tmp_dbs / "cases"
     first = export_cases(out_dir, learnings_path=learnings_path)

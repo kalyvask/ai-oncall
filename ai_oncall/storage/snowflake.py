@@ -43,9 +43,7 @@ class SnowflakeStore(TelemetryStore):
     ) -> list[TelemetryRecord]:
         raise NotImplementedError(_MSG)
 
-    def recent_deploys(
-        self, tenant_id: str, service: str, since: datetime
-    ) -> list[ChangeEvent]:
+    def recent_deploys(self, tenant_id: str, service: str, since: datetime) -> list[ChangeEvent]:
         raise NotImplementedError(_MSG)
 
     def query_spans(

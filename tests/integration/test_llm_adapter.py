@@ -47,7 +47,9 @@ def test_budget_ceiling_blocks_further_calls(monkeypatch) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
     llm = AnthropicLlm(model_alias="claude-haiku", cost_ceiling_usd=0.0001)
     llm._client = SimpleNamespace(
-        messages=SimpleNamespace(create=lambda **kw: _fake_response('{"x":1}', 1_000_000, 1_000_000))
+        messages=SimpleNamespace(
+            create=lambda **kw: _fake_response('{"x":1}', 1_000_000, 1_000_000)
+        )
     )
     llm.generate("first")  # pushes cumulative over the cap
     with pytest.raises(LlmBudgetExceeded):

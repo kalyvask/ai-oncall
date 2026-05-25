@@ -29,24 +29,32 @@ def _hypothesis_block(
     h: Hypothesis, *, top: bool, report_id: str | None = None
 ) -> list[dict[str, Any]]:
     header = (
-        f"*Top hypothesis* {_confidence_emoji(h.confidence)}  "
-        f"`{h.root_cause_service}` · {int(h.confidence * 100)}% confidence"
-    ) if top else f"_Alt:_ `{h.root_cause_service}` · {int(h.confidence * 100)}%"
+        (
+            f"*Top hypothesis* {_confidence_emoji(h.confidence)}  "
+            f"`{h.root_cause_service}` · {int(h.confidence * 100)}% confidence"
+        )
+        if top
+        else f"_Alt:_ `{h.root_cause_service}` · {int(h.confidence * 100)}%"
+    )
     blocks: list[dict[str, Any]] = [
         {"type": "section", "text": {"type": "mrkdwn", "text": header}},
         {"type": "section", "text": {"type": "mrkdwn", "text": h.reasoning}},
     ]
     evidence_lines = "\n".join(f"• {e.claim}  _({e.source})_" for e in h.evidence[:5])
     blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": evidence_lines}})
-    blocks.append({
-        "type": "section",
-        "text": {"type": "mrkdwn", "text": f"*Recommended:* `{h.recommended_action}`"},
-    })
+    blocks.append(
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"*Recommended:* `{h.recommended_action}`"},
+        }
+    )
     if h.runbook_link:
-        blocks.append({
-            "type": "context",
-            "elements": [{"type": "mrkdwn", "text": f"runbook: `{h.runbook_link}`"}],
-        })
+        blocks.append(
+            {
+                "type": "context",
+                "elements": [{"type": "mrkdwn", "text": f"runbook: `{h.runbook_link}`"}],
+            }
+        )
 
     # Block Kit interactive buttons. Only render on the top hypothesis (the
     # parent message); alt hypotheses are read-only. The rollback button is
@@ -61,39 +69,43 @@ def _hypothesis_block(
         and h.staged_action.tier == "propose"
         and h.staged_action.kind in actionable_kinds
     ):
-        blocks.append({
-            "type": "actions",
-            "elements": [
-                {
-                    "type": "button",
-                    "style": "danger",
-                    "text": {"type": "plain_text", "text": f"Approve {h.staged_action.kind}"},
-                    "action_id": "approve_rollback" if h.staged_action.kind == "rollback" else f"approve_{h.staged_action.kind}",
-                    "value": report_id,
-                    "confirm": {
-                        "title": {"type": "plain_text", "text": "Confirm action"},
-                        "text": {
-                            "type": "mrkdwn",
-                            "text": f"This will run `{h.staged_action.kind}` on `{h.staged_action.service}`.",
+        blocks.append(
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "style": "danger",
+                        "text": {"type": "plain_text", "text": f"Approve {h.staged_action.kind}"},
+                        "action_id": "approve_rollback"
+                        if h.staged_action.kind == "rollback"
+                        else f"approve_{h.staged_action.kind}",
+                        "value": report_id,
+                        "confirm": {
+                            "title": {"type": "plain_text", "text": "Confirm action"},
+                            "text": {
+                                "type": "mrkdwn",
+                                "text": f"This will run `{h.staged_action.kind}` on `{h.staged_action.service}`.",
+                            },
+                            "confirm": {"type": "plain_text", "text": "Run it"},
+                            "deny": {"type": "plain_text", "text": "Cancel"},
                         },
-                        "confirm": {"type": "plain_text", "text": "Run it"},
-                        "deny": {"type": "plain_text", "text": "Cancel"},
                     },
-                },
-                {
-                    "type": "button",
-                    "text": {"type": "plain_text", "text": "Wrong root cause"},
-                    "action_id": "mark_wrong_root_cause",
-                    "value": report_id,
-                },
-                {
-                    "type": "button",
-                    "text": {"type": "plain_text", "text": "Pin as not flaky"},
-                    "action_id": "pin_not_flaky",
-                    "value": report_id,
-                },
-            ],
-        })
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "Wrong root cause"},
+                        "action_id": "mark_wrong_root_cause",
+                        "value": report_id,
+                    },
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "Pin as not flaky"},
+                        "action_id": "pin_not_flaky",
+                        "value": report_id,
+                    },
+                ],
+            }
+        )
     return blocks
 
 
@@ -125,14 +137,26 @@ def render_parent(report: RcaReport) -> list[dict[str, Any]]:
     ]
     blocks.extend(_hypothesis_block(top, top=True, report_id=report.report_id))
     if report.escalation and report.escalation.should_escalate:
-        blocks.append({
-            "type": "section",
-            "text": {"type": "mrkdwn", "text": f"⚠️ *Escalation suggested:* {report.escalation.reason}"},
-        })
-    blocks.append({
-        "type": "context",
-        "elements": [{"type": "mrkdwn", "text": "React 👍 if useful · 👎 if wrong · 🟥 'wrong root cause'"}],
-    })
+        blocks.append(
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"⚠️ *Escalation suggested:* {report.escalation.reason}",
+                },
+            }
+        )
+    blocks.append(
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": "React 👍 if useful · 👎 if wrong · 🟥 'wrong root cause'",
+                }
+            ],
+        }
+    )
     return blocks
 
 

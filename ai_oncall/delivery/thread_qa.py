@@ -108,7 +108,11 @@ _INTENT_PATTERNS: tuple[tuple[str, str, tuple[ToolName, ...]], ...] = (
     # (regex, intent_label, tool list to consider). Patterns are evaluated in
     # order; show_metric must come before show_logs so "error rate" goes to
     # metrics, not logs.
-    (r"\b(metric|p\d{2,3}|latency|error\s+rate|cpu|memory|disk)\b", "show_metric", ("query_metrics",)),
+    (
+        r"\b(metric|p\d{2,3}|latency|error\s+rate|cpu|memory|disk)\b",
+        "show_metric",
+        ("query_metrics",),
+    ),
     (r"\b(logs?|errors?|exceptions?|stacktraces?)\b", "show_logs", ("query_logs",)),
     (r"\b(deploys?|rollouts?|merges?|pr|commits?)\b", "show_deploys", ("get_recent_deploys",)),
     (r"\b(runbook|playbook|sop)\b", "show_runbook", ("get_runbook",)),
@@ -134,9 +138,7 @@ def _classify_intent(question: str) -> tuple[str, tuple[ToolName, ...]]:
 # --- hypothesis picking --------------------------------------------------
 
 
-def _pick_hypothesis(
-    report: RcaReport, question: str, *, llm: Optional[LlmClient]
-) -> int:
+def _pick_hypothesis(report: RcaReport, question: str, *, llm: Optional[LlmClient]) -> int:
     """Decide which of the report's hypotheses the question is about.
 
     Cheap heuristic first: if the question mentions a service name from any
@@ -151,9 +153,7 @@ def _pick_hypothesis(
 
     # 2. LLM short-form classifier (only when llm provided).
     if llm is not None:
-        choices = ", ".join(
-            f"{i}: {h.root_cause_service}" for i, h in enumerate(report.hypotheses)
-        )
+        choices = ", ".join(f"{i}: {h.root_cause_service}" for i, h in enumerate(report.hypotheses))
         prompt = (
             f"User question: {question}\n"
             f"Choose which hypothesis the question is about. Reply with only the integer.\n"
@@ -196,16 +196,25 @@ def _plan_tool_calls(
         if tool_name == "query_metrics":
             # Default to p99 latency — the most common follow-up signal.
             plan.append(
-                ("query_metrics", {"service": service, "metric": "latency_ms", "since": since, "agg": "p99"})
+                (
+                    "query_metrics",
+                    {"service": service, "metric": "latency_ms", "since": since, "agg": "p99"},
+                )
             )
         elif tool_name == "query_logs":
             plan.append(
-                ("query_logs", {"service": service, "since": since, "regex": "(?i)error|warn|fail|timeout", "limit": 20})
+                (
+                    "query_logs",
+                    {
+                        "service": service,
+                        "since": since,
+                        "regex": "(?i)error|warn|fail|timeout",
+                        "limit": 20,
+                    },
+                )
             )
         elif tool_name == "get_recent_deploys":
-            plan.append(
-                ("get_recent_deploys", {"service": service, "since": since})
-            )
+            plan.append(("get_recent_deploys", {"service": service, "since": since}))
         elif tool_name == "get_runbook":
             plan.append(("get_runbook", {"service": service}))
         elif tool_name == "get_topology":
@@ -335,19 +344,21 @@ def _summarize_answer(
             if points:
                 latest = points[-1]
                 parts.append(
-                    f"latest {result.get('metric','metric')}={latest.get('v')} at {latest.get('t')}."
+                    f"latest {result.get('metric', 'metric')}={latest.get('v')} at {latest.get('t')}."
                 )
         elif tool == "query_logs" and isinstance(result, dict):
             lines = result.get("lines", [])
             if lines:
-                parts.append(f"{len(lines)} matching log lines; first severity={lines[0].get('severity')}.")
+                parts.append(
+                    f"{len(lines)} matching log lines; first severity={lines[0].get('severity')}."
+                )
         elif tool == "get_recent_deploys" and isinstance(result, list):
             if result:
                 parts.append(f"{len(result)} deploys, most recent at {result[0].get('timestamp')}.")
         elif tool == "get_runbook":
             parts.append("runbook attached." if result else "no runbook for this service.")
         elif tool == "get_topology" and isinstance(result, dict):
-            parts.append(f"topology: {len(result.get('nodes',[]))} nodes within depth 2.")
+            parts.append(f"topology: {len(result.get('nodes', []))} nodes within depth 2.")
         elif tool == "get_past_incidents" and isinstance(result, list):
             parts.append(f"{len(result)} past incidents on this service.")
     return " ".join(parts)

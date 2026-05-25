@@ -28,9 +28,7 @@ def _prom_response(values: list[tuple[float, str]]) -> dict:
         "status": "success",
         "data": {
             "resultType": "matrix",
-            "result": [
-                {"metric": {"service": "payment"}, "values": [[t, v] for t, v in values]}
-            ],
+            "result": [{"metric": {"service": "payment"}, "values": [[t, v] for t, v in values]}],
         },
     }
 
@@ -68,7 +66,13 @@ def _make_handler(prom_payload: dict, loki_payload: dict, capture: dict):
     return handler
 
 
-def _build_store(prom_payload: dict, loki_payload: dict, *, prom_token: str | None = None, capture: dict | None = None) -> tuple[LiveStore, dict]:
+def _build_store(
+    prom_payload: dict,
+    loki_payload: dict,
+    *,
+    prom_token: str | None = None,
+    capture: dict | None = None,
+) -> tuple[LiveStore, dict]:
     cap = capture if capture is not None else {}
     transport = httpx.MockTransport(_make_handler(prom_payload, loki_payload, cap))
     http = httpx.Client(transport=transport)

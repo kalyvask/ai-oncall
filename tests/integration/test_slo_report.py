@@ -31,13 +31,17 @@ def _stamp_latency(report_id: str, total_latency_ms: float, slo_violated: bool) 
     from ai_oncall.learnings.incidents import _conn
 
     with _conn() as conn:
-        row = conn.execute("SELECT report_json FROM incidents WHERE report_id=?", (report_id,)).fetchone()
+        row = conn.execute(
+            "SELECT report_json FROM incidents WHERE report_id=?", (report_id,)
+        ).fetchone()
         blob = json.loads(row["report_json"])
         inv = blob.setdefault("investigation", {}) or {}
         inv["total_latency_ms"] = total_latency_ms
         inv["slo_violated"] = slo_violated
         blob["investigation"] = inv
-        conn.execute("UPDATE incidents SET report_json=? WHERE report_id=?", (json.dumps(blob), report_id))
+        conn.execute(
+            "UPDATE incidents SET report_json=? WHERE report_id=?", (json.dumps(blob), report_id)
+        )
 
 
 @pytest.fixture

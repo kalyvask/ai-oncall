@@ -71,9 +71,7 @@ def test_root_cause_class_graph_increments_on_repeated_save(tmp_incidents_db) ->
     repeat = report.model_copy(update={"report_id": report.report_id + "_b"})
     save_incident(repeat)
 
-    classes = list_root_cause_classes(
-        tenant_id=report.tenant_id, service=report.alert.service
-    )
+    classes = list_root_cause_classes(tenant_id=report.tenant_id, service=report.alert.service)
     # The fixture's recommended_action contains "rollback" so class is "deploy_regression".
     assert any(c["root_cause_class"] == "deploy_regression" for c in classes)
     target = next(c for c in classes if c["root_cause_class"] == "deploy_regression")
@@ -98,17 +96,16 @@ def test_root_cause_class_filter_respects_trust_tier(tmp_incidents_db) -> None:
     # The graph rows track the latest trust_tier the (tenant, service, class) was
     # written under; later writes overwrite the row's tier. So at least one of
     # the queries returns the row.
-    assert (only_local or only_agg), "graph row should appear under at least one tier"
+    assert only_local or only_agg, "graph row should appear under at least one tier"
 
 
 def test_save_with_no_hypotheses_raises(tmp_incidents_db) -> None:
     report = _report()
-    bad = report.model_copy(update={"hypotheses": []})
-    # `hypotheses` has min_length=1 in the model, so model_copy with [] will
-    # fail validation on round-trip — instead we monkey it onto a fresh dict.
+    # `hypotheses` has min_length=1 in the model; the model rejects an empty
+    # list at construction time, so we round-trip through model_dump to build
+    # a payload that bypasses model_copy's preserve-instance shortcut.
     payload = report.model_dump(mode="json")
     payload["hypotheses"] = []
-    # The model itself rejects an empty list at construction time.
     from pydantic import ValidationError as PydanticValidationError
 
     with pytest.raises(PydanticValidationError):

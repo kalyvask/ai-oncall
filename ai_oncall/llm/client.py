@@ -30,8 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 class LlmClient(Protocol):
-    def generate(self, prompt: str, *, max_tokens: int = 1024, **kwargs: Any) -> dict[str, Any]:
-        ...
+    def generate(self, prompt: str, *, max_tokens: int = 1024, **kwargs: Any) -> dict[str, Any]: ...
 
 
 class LlmBudgetExceeded(RuntimeError):
@@ -54,8 +53,7 @@ def _scrub_prompt(prompt: str) -> tuple[str, tuple[str, ...]]:
         return prompt or "", ()
     if settings.raw_secrets_blocked and has_secrets(prompt):
         raise RawSecretsBlocked(
-            "prompt contains a high-confidence secret pattern and "
-            "raw_secrets_blocked is enabled"
+            "prompt contains a high-confidence secret pattern and raw_secrets_blocked is enabled"
         )
     if not settings.redact_prompts:
         # Log only — used by local debug runs where the operator accepts the risk.
@@ -63,7 +61,9 @@ def _scrub_prompt(prompt: str) -> tuple[str, tuple[str, ...]]:
 
         result = _scan(prompt)
         if result.had_hits:
-            logger.warning("prompt_secret_detected_but_redact_disabled", extra={"hits": list(result.hits)})
+            logger.warning(
+                "prompt_secret_detected_but_redact_disabled", extra={"hits": list(result.hits)}
+            )
         return prompt, result.hits
     result = redact(prompt)
     if result.had_hits:
@@ -116,9 +116,7 @@ class AnthropicLlm:
         self.model_id = CATALOG[model_alias]["id"]
         self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
         if not self.api_key:
-            raise RuntimeError(
-                "ANTHROPIC_API_KEY not set. Provide via env or use MockLlm."
-            )
+            raise RuntimeError("ANTHROPIC_API_KEY not set. Provide via env or use MockLlm.")
         self.request_timeout = request_timeout
         self.max_retries = max_retries
         self.cost_ceiling_usd = (
@@ -135,9 +133,7 @@ class AnthropicLlm:
         if self._client is None:
             import anthropic
 
-            self._client = anthropic.Anthropic(
-                api_key=self.api_key, timeout=self.request_timeout
-            )
+            self._client = anthropic.Anthropic(api_key=self.api_key, timeout=self.request_timeout)
         return self._client
 
     def generate(
@@ -169,9 +165,8 @@ class AnthropicLlm:
         system_msg = system or ""
         if expect_json:
             system_msg = (
-                (system_msg + "\n\n" if system_msg else "")
-                + "Return your response as a single raw JSON object. No prose, no markdown fences."
-            )
+                system_msg + "\n\n" if system_msg else ""
+            ) + "Return your response as a single raw JSON object. No prose, no markdown fences."
 
         last_error: Exception | None = None
         for attempt in range(self.max_retries + 1):
@@ -214,7 +209,7 @@ class AnthropicLlm:
 
 
 def _sleep_backoff(attempt: int) -> None:
-    base = min(8.0, 0.5 * (2 ** attempt))
+    base = min(8.0, 0.5 * (2**attempt))
     jitter = random.uniform(0, base * 0.25)
     time.sleep(base + jitter)
 
@@ -230,9 +225,7 @@ def get_client() -> LlmClient:
     provider = settings.llm_provider
     if provider == "anthropic":
         if not os.environ.get("ANTHROPIC_API_KEY"):
-            logger.warning(
-                "anthropic_provider_selected_but_key_missing — falling back to MockLlm"
-            )
+            logger.warning("anthropic_provider_selected_but_key_missing — falling back to MockLlm")
             return MockLlm()
         alias = _alias_for_model_id(settings.rca_model)
         return AnthropicLlm(model_alias=alias)

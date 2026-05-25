@@ -18,7 +18,9 @@ EXPECTED_FAMILIES = {
 
 def test_replay_mode_hits_perfect_scores() -> None:
     results = run()
-    assert len(results) == len(EXPECTED_FAMILIES), f"expected one case per fault family, got {len(results)}"
+    assert len(results) == len(EXPECTED_FAMILIES), (
+        f"expected one case per fault family, got {len(results)}"
+    )
     families = {r.family for r in results}
     assert families == EXPECTED_FAMILIES, families
 

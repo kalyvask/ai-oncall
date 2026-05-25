@@ -37,13 +37,9 @@ def _make_live_store() -> TelemetryStore:
     from ai_oncall.storage.sqlite import SqliteStore
 
     if not settings.prometheus_url:
-        raise ValueError(
-            "AI_ONCALL_TELEMETRY_STORE=live requires AI_ONCALL_PROMETHEUS_URL"
-        )
+        raise ValueError("AI_ONCALL_TELEMETRY_STORE=live requires AI_ONCALL_PROMETHEUS_URL")
     if not settings.loki_url:
-        raise ValueError(
-            "AI_ONCALL_TELEMETRY_STORE=live requires AI_ONCALL_LOKI_URL"
-        )
+        raise ValueError("AI_ONCALL_TELEMETRY_STORE=live requires AI_ONCALL_LOKI_URL")
     prom = PrometheusClient(
         settings.prometheus_url,
         service_label=settings.prometheus_service_label,

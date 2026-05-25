@@ -26,7 +26,6 @@ from ai_oncall.delivery.thread_qa import (
     _pick_hypothesis,
 )
 from ai_oncall.learnings.incidents import save_incident
-from ai_oncall.llm.client import MockLlm
 from ai_oncall.models import RcaReport
 from ai_oncall.storage.factory import make_store
 
@@ -159,8 +158,7 @@ def test_replay_incident_returns_match_when_no_pipeline_change(
     # so the top hypothesis is the same. Confidence may shift slightly because
     # calibration runs on each replay, but the verdict should not be a regression.
     assert diff.verdict in {"match", "drift", "improvement"}, (
-        f"unexpected verdict for identical replay: {diff.verdict} "
-        f"differences={diff.differences}"
+        f"unexpected verdict for identical replay: {diff.verdict} differences={diff.differences}"
     )
 
 

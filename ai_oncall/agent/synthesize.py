@@ -37,9 +37,13 @@ def _model_alias() -> str:
 
 
 def _build_prompt(alert: Alert, context: dict[str, Any]) -> str:
-    return synthesize_v1.SYSTEM_PROMPT + "\n\n" + synthesize_v1.USER_PROMPT_TEMPLATE.format(
-        alert_json=alert.model_dump_json(by_alias=True),
-        context_json=json.dumps(context, default=str),
+    return (
+        synthesize_v1.SYSTEM_PROMPT
+        + "\n\n"
+        + synthesize_v1.USER_PROMPT_TEMPLATE.format(
+            alert_json=alert.model_dump_json(by_alias=True),
+            context_json=json.dumps(context, default=str),
+        )
     )
 
 
@@ -79,7 +83,9 @@ def synthesize(
     payload.setdefault("generated_at", datetime.now(timezone.utc).isoformat())
     payload.setdefault("model", _model_ref().model_dump())
 
-    cost = estimate_cost(_model_alias(), response.get("tokens_in", 0), response.get("tokens_out", 0))
+    cost = estimate_cost(
+        _model_alias(), response.get("tokens_in", 0), response.get("tokens_out", 0)
+    )
     llm_call_records = list(tracer.records) if tracer is not None else []
     # The investigation field reflects what the agent ACTUALLY ran, not what
     # the LLM may have hallucinated. Overwrite if tool_calls were supplied.

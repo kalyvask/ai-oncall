@@ -32,8 +32,11 @@ TENANT = "alpha"
 
 def _alert(severity: str = "page") -> Alert:
     return Alert(
-        alert_id="a1", tenant_id=TENANT, fired_at=T0,
-        source="manual", severity=severity,  # type: ignore[arg-type]
+        alert_id="a1",
+        tenant_id=TENANT,
+        fired_at=T0,
+        source="manual",
+        severity=severity,  # type: ignore[arg-type]
         service="checkout",
         signal=AlertSignal(kind="manual"),
         title="checkout slow",
@@ -52,8 +55,11 @@ def _hypothesis(action: str, confidence: float, service: str = "payment") -> Hyp
 
 def _report(hs: list[Hypothesis], severity: str = "page") -> RcaReport:
     return RcaReport(
-        report_id="r1", tenant_id=TENANT, alert=_alert(severity),
-        generated_at=T0, model=ModelRef(provider="mock", id="mock"),
+        report_id="r1",
+        tenant_id=TENANT,
+        alert=_alert(severity),
+        generated_at=T0,
+        model=ModelRef(provider="mock", id="mock"),
         hypotheses=hs,
     )
 
@@ -61,19 +67,22 @@ def _report(hs: list[Hypothesis], severity: str = "page") -> RcaReport:
 # --- kind inference -------------------------------------------------------
 
 
-@pytest.mark.parametrize("text,expected_kind", [
-    ("git revert abc1234", "rollback"),
-    ("kubectl rollout undo deploy/payment", "rollback"),
-    ("Roll back the last deploy", "rollback"),
-    ("kubectl rollout restart deploy/payment", "restart"),
-    ("restart the payment pods", "restart"),
-    ("Scale up to 8 replicas", "scale"),
-    ("kubectl scale --replicas=4 deploy/payment", "scale"),
-    ("Disable feature flag checkout.async-batching", "feature_flag"),
-    ("Toggle off the experimental flag", "feature_flag"),
-    ("Wait and see; monitor only", "noop"),
-    ("Investigate logs and decide", "manual"),
-])
+@pytest.mark.parametrize(
+    "text,expected_kind",
+    [
+        ("git revert abc1234", "rollback"),
+        ("kubectl rollout undo deploy/payment", "rollback"),
+        ("Roll back the last deploy", "rollback"),
+        ("kubectl rollout restart deploy/payment", "restart"),
+        ("restart the payment pods", "restart"),
+        ("Scale up to 8 replicas", "scale"),
+        ("kubectl scale --replicas=4 deploy/payment", "scale"),
+        ("Disable feature flag checkout.async-batching", "feature_flag"),
+        ("Toggle off the experimental flag", "feature_flag"),
+        ("Wait and see; monitor only", "noop"),
+        ("Investigate logs and decide", "manual"),
+    ],
+)
 def test_kind_inference(text: str, expected_kind: str) -> None:
     report = _report([_hypothesis(text, confidence=0.9)])
     out = stage_actions(report)

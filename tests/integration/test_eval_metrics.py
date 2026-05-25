@@ -7,7 +7,6 @@ cases load and have the required fields.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from evals.real_loader import iter_real_cases, score_real_case

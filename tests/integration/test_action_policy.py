@@ -134,7 +134,11 @@ def test_approve_real_call_writes_audit_with_blast_radius(client) -> None:
     audit_path = learnings_store.LEARNINGS_PATH
     assert audit_path.exists()
     text = audit_path.read_text(encoding="utf-8")
-    audit_lines = [json.loads(line) for line in text.splitlines() if line.strip() and '"kind": "slack_action"' in line]
+    audit_lines = [
+        json.loads(line)
+        for line in text.splitlines()
+        if line.strip() and '"kind": "slack_action"' in line
+    ]
     assert audit_lines, "expected an audit row from approve"
     assert "blast=medium" in audit_lines[-1]["detail"]
 

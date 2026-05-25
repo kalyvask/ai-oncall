@@ -53,17 +53,24 @@ def investigate(
                 result, size, error = None, 0, str(exc)
             duration_ms = (time.perf_counter() - t0) * 1000
 
-            trace.append(ToolCallRecord(
-                tool=query.tool,
-                input=query.input,
-                result_summary=summary,
-                result_size=size,
-                duration_ms=duration_ms,
-            ))
-            bundle["results"].append({
-                "tool": query.tool, "input": query.input,
-                "summary": summary, "result": result, "error": error,
-            })
+            trace.append(
+                ToolCallRecord(
+                    tool=query.tool,
+                    input=query.input,
+                    result_summary=summary,
+                    result_size=size,
+                    duration_ms=duration_ms,
+                )
+            )
+            bundle["results"].append(
+                {
+                    "tool": query.tool,
+                    "input": query.input,
+                    "summary": summary,
+                    "result": result,
+                    "error": error,
+                }
+            )
             budget -= 1
     return trace, bundle
 

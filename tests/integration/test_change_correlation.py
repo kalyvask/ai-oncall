@@ -116,8 +116,11 @@ def test_github_client_truncates_excerpt_to_2k() -> None:
 
 def _alert() -> Alert:
     return Alert(
-        alert_id="a1", tenant_id=TENANT, fired_at=T0,
-        source="manual", severity="page",
+        alert_id="a1",
+        tenant_id=TENANT,
+        fired_at=T0,
+        source="manual",
+        severity="page",
         service="checkout",
         signal=AlertSignal(kind="manual"),
         title="checkout slow",
@@ -126,8 +129,11 @@ def _alert() -> Alert:
 
 def _report(hypotheses: list[Hypothesis]) -> RcaReport:
     return RcaReport(
-        report_id="r1", tenant_id=TENANT, alert=_alert(),
-        generated_at=T0, model=ModelRef(provider="mock", id="mock"),
+        report_id="r1",
+        tenant_id=TENANT,
+        alert=_alert(),
+        generated_at=T0,
+        model=ModelRef(provider="mock", id="mock"),
         hypotheses=hypotheses,
     )
 
@@ -144,9 +150,15 @@ def _hypothesis(service: str, evidence_count: int = 1) -> Hypothesis:
 
 def _change(service: str, sha: str = "abc1234", patch: str = "") -> ChangeEvent:
     return ChangeEvent(
-        tenant_id=TENANT, event_id=sha, service=service,
-        kind="pr_merged", timestamp=T0 - timedelta(hours=1),
-        actor="alice", title="bump SDK", sha=sha, patch_excerpt=patch or None,
+        tenant_id=TENANT,
+        event_id=sha,
+        service=service,
+        kind="pr_merged",
+        timestamp=T0 - timedelta(hours=1),
+        actor="alice",
+        title="bump SDK",
+        sha=sha,
+        patch_excerpt=patch or None,
     )
 
 
@@ -158,9 +170,17 @@ def test_correlate_uses_local_patch_excerpt(tmp_path) -> None:
         "INSERT INTO change_events (tenant_id, event_id, service, kind, timestamp, actor, title, url, sha, patch_excerpt, files_changed_json) "
         "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         (
-            change.tenant_id, change.event_id, change.service, change.kind,
-            change.timestamp.isoformat(), change.actor, change.title, change.url,
-            change.sha, change.patch_excerpt, json.dumps(change.files_changed),
+            change.tenant_id,
+            change.event_id,
+            change.service,
+            change.kind,
+            change.timestamp.isoformat(),
+            change.actor,
+            change.title,
+            change.url,
+            change.sha,
+            change.patch_excerpt,
+            json.dumps(change.files_changed),
         ),
     )
     store._conn.commit()
@@ -181,9 +201,17 @@ def test_correlate_falls_back_to_github_when_local_excerpt_empty(tmp_path) -> No
         "INSERT INTO change_events (tenant_id, event_id, service, kind, timestamp, actor, title, url, sha, patch_excerpt, files_changed_json) "
         "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         (
-            change.tenant_id, change.event_id, change.service, change.kind,
-            change.timestamp.isoformat(), change.actor, change.title, change.url,
-            change.sha, None, "[]",
+            change.tenant_id,
+            change.event_id,
+            change.service,
+            change.kind,
+            change.timestamp.isoformat(),
+            change.actor,
+            change.title,
+            change.url,
+            change.sha,
+            None,
+            "[]",
         ),
     )
     store._conn.commit()
@@ -194,9 +222,7 @@ def test_correlate_falls_back_to_github_when_local_excerpt_empty(tmp_path) -> No
             return httpx.Response(200, json=_commit_payload("def5678"))
         return httpx.Response(404)
 
-    github = GitHubClient(
-        "owner/repo", client=httpx.Client(transport=httpx.MockTransport(handler))
-    )
+    github = GitHubClient("owner/repo", client=httpx.Client(transport=httpx.MockTransport(handler)))
     report = _report([_hypothesis("payment")])
     out = correlate_changes(report, store, github=github)
 
@@ -219,9 +245,17 @@ def test_correlate_respects_evidence_max(tmp_path) -> None:
         "INSERT INTO change_events (tenant_id, event_id, service, kind, timestamp, actor, title, url, sha, patch_excerpt, files_changed_json) "
         "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         (
-            change.tenant_id, change.event_id, change.service, change.kind,
-            change.timestamp.isoformat(), change.actor, change.title, change.url,
-            change.sha, change.patch_excerpt, "[]",
+            change.tenant_id,
+            change.event_id,
+            change.service,
+            change.kind,
+            change.timestamp.isoformat(),
+            change.actor,
+            change.title,
+            change.url,
+            change.sha,
+            change.patch_excerpt,
+            "[]",
         ),
     )
     store._conn.commit()

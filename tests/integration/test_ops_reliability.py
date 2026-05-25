@@ -49,7 +49,7 @@ def test_metrics_endpoint_returns_prometheus_format(client) -> None:
 
 def test_jobs_list_filters_by_failed_status(client) -> None:
     from ai_oncall.jobs import enqueue, fail
-    from ai_oncall.jobs.store import _conn, claim_next
+    from ai_oncall.jobs.store import claim_next
 
     # Seed two jobs in the test's isolated DB
     enqueue(kind="rca", tenant_id="demo", idempotency_key="a", payload={"alert_id": "a"})

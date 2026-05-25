@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -33,9 +33,7 @@ REPO = Path(__file__).resolve().parents[2]
 def test_tracer_records_a_call_with_prompt_hash_and_latency() -> None:
     tracer = LlmTracer()
     llm = MockLlm(fixtures={"hello": {"text": "world", "tokens_in": 10, "tokens_out": 5}})
-    response = tracer.call(
-        llm, "hello world", stage="plan", prompt_version="plan_v1"
-    )
+    response = tracer.call(llm, "hello world", stage="plan", prompt_version="plan_v1")
     assert response["text"] == "world"
     assert len(tracer.records) == 1
     record = tracer.records[0]
@@ -75,10 +73,20 @@ def test_tracer_accumulates_across_calls() -> None:
 
 
 def _mock_with(plan_payload: dict, report_payload: dict) -> MockLlm:
-    return MockLlm(fixtures={
-        plan_v1.SYSTEM_PROMPT[:60]: {"text": json.dumps(plan_payload), "tokens_in": 800, "tokens_out": 200},
-        synthesize_v1.SYSTEM_PROMPT[:60]: {"text": json.dumps(report_payload), "tokens_in": 4000, "tokens_out": 600},
-    })
+    return MockLlm(
+        fixtures={
+            plan_v1.SYSTEM_PROMPT[:60]: {
+                "text": json.dumps(plan_payload),
+                "tokens_in": 800,
+                "tokens_out": 200,
+            },
+            synthesize_v1.SYSTEM_PROMPT[:60]: {
+                "text": json.dumps(report_payload),
+                "tokens_in": 4000,
+                "tokens_out": 600,
+            },
+        }
+    )
 
 
 def test_run_rca_attaches_two_llm_calls_to_investigation(tmp_path) -> None:
@@ -89,17 +97,36 @@ def test_run_rca_attaches_two_llm_calls_to_investigation(tmp_path) -> None:
         (REPO / "fixtures/expected_reports/checkout_regression.json").read_text(encoding="utf-8")
     )
     plan_payload = {
-        "tenant_id": alert.tenant_id, "alert_id": alert.alert_id,
+        "tenant_id": alert.tenant_id,
+        "alert_id": alert.alert_id,
         "hypotheses": [
-            {"statement": "payment regression", "confidence": 0.7, "queries": [
-                {"tool": "get_recent_deploys", "input": {"service": "payment", "since": "2026-04-24T03:14:00Z"}},
-            ]},
-            {"statement": "self regression", "confidence": 0.3, "queries": [
-                {"tool": "get_recent_deploys", "input": {"service": "checkout", "since": "2026-04-24T03:14:00Z"}},
-            ]},
-            {"statement": "external stripe", "confidence": 0.1, "queries": [
-                {"tool": "get_runbook", "input": {"service": "payment"}},
-            ]},
+            {
+                "statement": "payment regression",
+                "confidence": 0.7,
+                "queries": [
+                    {
+                        "tool": "get_recent_deploys",
+                        "input": {"service": "payment", "since": "2026-04-24T03:14:00Z"},
+                    },
+                ],
+            },
+            {
+                "statement": "self regression",
+                "confidence": 0.3,
+                "queries": [
+                    {
+                        "tool": "get_recent_deploys",
+                        "input": {"service": "checkout", "since": "2026-04-24T03:14:00Z"},
+                    },
+                ],
+            },
+            {
+                "statement": "external stripe",
+                "confidence": 0.1,
+                "queries": [
+                    {"tool": "get_runbook", "input": {"service": "payment"}},
+                ],
+            },
         ],
     }
     mock = _mock_with(plan_payload, expected)
@@ -130,17 +157,30 @@ def test_run_rca_report_with_llm_calls_is_schema_valid(tmp_path) -> None:
         (REPO / "fixtures/expected_reports/checkout_regression.json").read_text(encoding="utf-8")
     )
     plan_payload = {
-        "tenant_id": alert.tenant_id, "alert_id": alert.alert_id,
+        "tenant_id": alert.tenant_id,
+        "alert_id": alert.alert_id,
         "hypotheses": [
-            {"statement": "h1", "confidence": 0.7, "queries": [
-                {"tool": "get_runbook", "input": {"service": "payment"}},
-            ]},
-            {"statement": "h2", "confidence": 0.5, "queries": [
-                {"tool": "get_runbook", "input": {"service": "checkout"}},
-            ]},
-            {"statement": "h3", "confidence": 0.3, "queries": [
-                {"tool": "get_runbook", "input": {"service": "cart"}},
-            ]},
+            {
+                "statement": "h1",
+                "confidence": 0.7,
+                "queries": [
+                    {"tool": "get_runbook", "input": {"service": "payment"}},
+                ],
+            },
+            {
+                "statement": "h2",
+                "confidence": 0.5,
+                "queries": [
+                    {"tool": "get_runbook", "input": {"service": "checkout"}},
+                ],
+            },
+            {
+                "statement": "h3",
+                "confidence": 0.3,
+                "queries": [
+                    {"tool": "get_runbook", "input": {"service": "cart"}},
+                ],
+            },
         ],
     }
     mock = _mock_with(plan_payload, expected)

@@ -106,9 +106,7 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         )
         """
     )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_jobs_status_next ON jobs(status, next_attempt_at)"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status_next ON jobs(status, next_attempt_at)")
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_jobs_tenant_created ON jobs(tenant_id, created_at)"
     )

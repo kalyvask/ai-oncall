@@ -40,9 +40,12 @@ def query_metrics(
     agg: Literal["p50", "p99", "p95", "sum", "rate", "avg"],
 ) -> dict[str, Any]:
     points = store.query_metric(tenant_id, service, metric, _parse_iso(since), agg)[:60]
-    return {"service": service, "metric": metric, "agg": agg, "points": [
-        {"t": t.isoformat(), "v": v} for t, v in points
-    ]}
+    return {
+        "service": service,
+        "metric": metric,
+        "agg": agg,
+        "points": [{"t": t.isoformat(), "v": v} for t, v in points],
+    }
 
 
 def query_logs(
@@ -55,10 +58,16 @@ def query_logs(
     limit: int = 50,
 ) -> dict[str, Any]:
     capped = min(limit, 50)
-    rows: list[TelemetryRecord] = store.query_logs(tenant_id, service, _parse_iso(since), regex, capped)
-    return {"service": service, "lines": [
-        {"t": r.timestamp.isoformat(), "severity": r.severity, "body": r.body} for r in rows[:capped]
-    ]}
+    rows: list[TelemetryRecord] = store.query_logs(
+        tenant_id, service, _parse_iso(since), regex, capped
+    )
+    return {
+        "service": service,
+        "lines": [
+            {"t": r.timestamp.isoformat(), "severity": r.severity, "body": r.body}
+            for r in rows[:capped]
+        ],
+    }
 
 
 def get_recent_deploys(
@@ -69,10 +78,17 @@ def get_recent_deploys(
     since: str,
 ) -> list[dict[str, Any]]:
     events: list[ChangeEvent] = store.recent_deploys(tenant_id, service, _parse_iso(since))[:25]
-    return [{
-        "event_id": e.event_id, "kind": e.kind, "timestamp": e.timestamp.isoformat(),
-        "actor": e.actor, "title": e.title, "sha": e.sha,
-    } for e in events]
+    return [
+        {
+            "event_id": e.event_id,
+            "kind": e.kind,
+            "timestamp": e.timestamp.isoformat(),
+            "actor": e.actor,
+            "title": e.title,
+            "sha": e.sha,
+        }
+        for e in events
+    ]
 
 
 def get_runbook(_store: TelemetryStore, _tenant_id: str, *, service: str) -> str | None:
@@ -108,8 +124,14 @@ def get_topology(
             break
     return {
         "service": service,
-        "nodes": [{"service": s, "status": nodes[s].status if s in nodes else "unknown"} for s in visited],
-        "edges": [{"from": e.from_, "to": e.to} for e in snap.edges if e.from_ in visited and e.to in visited],
+        "nodes": [
+            {"service": s, "status": nodes[s].status if s in nodes else "unknown"} for s in visited
+        ],
+        "edges": [
+            {"from": e.from_, "to": e.to}
+            for e in snap.edges
+            if e.from_ in visited and e.to in visited
+        ],
     }
 
 
@@ -146,9 +168,7 @@ def get_past_incidents(
     if not safe_tiers:
         safe_tiers = ("local",)
 
-    incidents = list_incidents(
-        tenant_id=tenant_id, service=service, limit=k
-    )
+    incidents = list_incidents(tenant_id=tenant_id, service=service, limit=k)
     out: list[dict[str, Any]] = []
     for row in incidents:
         out.append(

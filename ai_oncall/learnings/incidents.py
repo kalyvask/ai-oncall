@@ -21,10 +21,9 @@ on the report row so cross-tenant queries can opt in / out at read time.
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Iterator, Literal, Optional
 
@@ -115,9 +114,7 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     cursor.execute(
         "CREATE INDEX IF NOT EXISTS idx_incidents_root_cause ON incidents(tenant_id, root_cause_service)"
     )
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS idx_incidents_created_at ON incidents(created_at)"
-    )
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_incidents_created_at ON incidents(created_at)")
 
     # Typed memory graph: one row per (tenant, service, root_cause_class).
     # Bumped on every incident; latest snapshot kept for fast retrieval.
@@ -220,9 +217,7 @@ def save_incident(
     return row
 
 
-def get_incident(
-    report_id: str, *, db_path: Path | None = None
-) -> Optional[IncidentRow]:
+def get_incident(report_id: str, *, db_path: Path | None = None) -> Optional[IncidentRow]:
     with _conn(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM incidents WHERE report_id = ?", (report_id,))
@@ -253,8 +248,7 @@ def list_incidents(
     with _conn(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute(
-            f"SELECT * FROM incidents WHERE {where_sql} "
-            "ORDER BY created_at DESC LIMIT ?",
+            f"SELECT * FROM incidents WHERE {where_sql} ORDER BY created_at DESC LIMIT ?",
             params,
         )
         return [_row_to_model(r) for r in cursor.fetchall()]
@@ -459,9 +453,7 @@ _CLASS_RULES: tuple[tuple[str, str], ...] = (
 )
 
 
-def _classify_root_cause(
-    root_cause_service: str, recommended_action: str | None
-) -> str | None:
+def _classify_root_cause(root_cause_service: str, recommended_action: str | None) -> str | None:
     if not recommended_action:
         return None
     text = recommended_action.lower()

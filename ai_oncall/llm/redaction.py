@@ -47,11 +47,21 @@ _RULES: tuple[_Rule, ...] = (
         "aws_secret_access_key",
         re.compile(r"(?<![A-Za-z0-9/+])(?P<v>[A-Za-z0-9/+]{40})(?![A-Za-z0-9/+])"),
     ),
-    _Rule("ssh_private_key", re.compile(r"-----BEGIN (?:RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]+?-----END (?:RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----")),
+    _Rule(
+        "ssh_private_key",
+        re.compile(
+            r"-----BEGIN (?:RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]+?-----END (?:RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----"
+        ),
+    ),
     _Rule("generic_bearer", re.compile(r"(?i)bearer\s+(?P<v>[A-Za-z0-9._\-]{20,})")),
     _Rule("openai_key", re.compile(r"\b(?P<v>sk-[A-Za-z0-9]{20,})\b")),
     _Rule("anthropic_key", re.compile(r"\b(?P<v>sk-ant-[A-Za-z0-9_\-]{20,})\b")),
-    _Rule("github_token", re.compile(r"\b(?P<v>ghp_[A-Za-z0-9]{20,}|gho_[A-Za-z0-9]{20,}|ghs_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b")),
+    _Rule(
+        "github_token",
+        re.compile(
+            r"\b(?P<v>ghp_[A-Za-z0-9]{20,}|gho_[A-Za-z0-9]{20,}|ghs_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b"
+        ),
+    ),
     _Rule("slack_token", re.compile(r"\b(?P<v>xox[abprs]-[A-Za-z0-9\-]{10,})\b")),
     _Rule("gitlab_token", re.compile(r"\b(?P<v>glpat-[A-Za-z0-9_\-]{20,})\b")),
     _Rule("stripe_key", re.compile(r"\b(?P<v>(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9]{20,})\b")),
@@ -60,12 +70,21 @@ _RULES: tuple[_Rule, ...] = (
         re.compile(r"\b(?P<v>eyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)\b"),
     ),
     _Rule("email", re.compile(r"\b(?P<v>[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,})\b")),
-    _Rule("ipv4", re.compile(r"\b(?P<v>(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?:\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3})\b")),
+    _Rule(
+        "ipv4",
+        re.compile(
+            r"\b(?P<v>(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?:\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3})\b"
+        ),
+    ),
     _Rule("us_ssn", re.compile(r"\b(?P<v>\d{3}-\d{2}-\d{4})\b")),
-    _Rule("us_phone", re.compile(r"\b(?P<v>(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})\b")),
+    _Rule(
+        "us_phone", re.compile(r"\b(?P<v>(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})\b")
+    ),
     _Rule(
         "password_assignment",
-        re.compile(r"(?i)(password|passwd|pwd|api[_\-]?key|secret|token)\s*[:=]\s*[\"']?(?P<v>[^\s\"']{6,})"),
+        re.compile(
+            r"(?i)(password|passwd|pwd|api[_\-]?key|secret|token)\s*[:=]\s*[\"']?(?P<v>[^\s\"']{6,})"
+        ),
     ),
 )
 
@@ -92,7 +111,11 @@ def redact(text: str, *, rules: Iterable[_Rule] = _RULES) -> RedactionResult:
         def _sub(match: re.Match[str], _name: str = rule.name) -> str:
             if _name not in fired:
                 fired.append(_name)
-            return match.group(0).replace(match.group("v"), PLACEHOLDER) if match.groupdict().get("v") else PLACEHOLDER
+            return (
+                match.group(0).replace(match.group("v"), PLACEHOLDER)
+                if match.groupdict().get("v")
+                else PLACEHOLDER
+            )
 
         out = rule.pattern.sub(_sub, out)
     return RedactionResult(text=out, hits=tuple(fired))

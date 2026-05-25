@@ -8,7 +8,6 @@ title; the simple LIKE-based fallback below ships with the v1 cut.
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
@@ -33,7 +32,9 @@ class LearningRecord(BaseModel):
     recorded_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-def append_from_report(report: RcaReport, *, reaction: Reaction | None = None, correction: str | None = None) -> LearningRecord:
+def append_from_report(
+    report: RcaReport, *, reaction: Reaction | None = None, correction: str | None = None
+) -> LearningRecord:
     LEARNINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
     record = LearningRecord(
         tenant_id=report.tenant_id,
@@ -65,6 +66,10 @@ def retrieve_similar(tenant_id: str, alert_title: str, k: int = 3) -> list[Learn
                 continue
             if record.tenant_id != tenant_id:
                 continue
-            if any(token in record.alert_title.lower() for token in title_lower.split() if len(token) > 3):
+            if any(
+                token in record.alert_title.lower()
+                for token in title_lower.split()
+                if len(token) > 3
+            ):
                 matches.append(record)
     return matches[:k]

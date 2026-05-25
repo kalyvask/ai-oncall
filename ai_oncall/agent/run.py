@@ -107,16 +107,16 @@ def _maybe_post_to_slack(report: RcaReport) -> None:
         )
 
 
-def _apply_calibration(
-    report: RcaReport, store: TelemetryStore
-) -> tuple[RcaReport, "object"]:
+def _apply_calibration(report: RcaReport, store: TelemetryStore) -> tuple[RcaReport, "object"]:
     """Pull the side-channel signals calibration needs, then run it.
 
     Past incidents come from the typed memory graph (local tier only at this
     layer; aggregated tier requires explicit caller opt-in). Recent deploys
     come from the same storage the tools use.
     """
-    top_root = report.hypotheses[0].root_cause_service if report.hypotheses else report.alert.service
+    top_root = (
+        report.hypotheses[0].root_cause_service if report.hypotheses else report.alert.service
+    )
     since = datetime.now(timezone.utc) - timedelta(hours=24)
 
     try:

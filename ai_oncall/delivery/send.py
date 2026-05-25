@@ -69,8 +69,7 @@ class SlackTransport(Protocol):
     """Subset of ``slack_sdk.web.WebClient`` we depend on. Letting callers
     pass any compatible object keeps this module testable without a real SDK."""
 
-    def chat_postMessage(self, **kwargs: Any) -> dict[str, Any]:
-        ...
+    def chat_postMessage(self, **kwargs: Any) -> dict[str, Any]: ...
 
 
 # --- default httpx-based transport --------------------------------------
@@ -117,9 +116,7 @@ class HttpxSlackTransport:
                 retry_after_seconds=retry_after,
             )
         if resp.status_code != 200:
-            raise SlackSendError(
-                f"Slack returned {resp.status_code}: {resp.text[:200]}"
-            )
+            raise SlackSendError(f"Slack returned {resp.status_code}: {resp.text[:200]}")
         body = resp.json()
         if not body.get("ok"):
             # Slack body errors (e.g. ratelimited, server_error) can also
@@ -261,7 +258,5 @@ def _parse_retry_after(header: str | None) -> float | None:
 def _default_transport() -> SlackTransport:
     token = getattr(settings, "slack_bot_token", None)
     if not token:
-        raise SlackSendError(
-            "AI_ONCALL_SLACK_BOT_TOKEN is not set; cannot post to Slack"
-        )
+        raise SlackSendError("AI_ONCALL_SLACK_BOT_TOKEN is not set; cannot post to Slack")
     return HttpxSlackTransport(token)

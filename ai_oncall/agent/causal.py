@@ -46,11 +46,7 @@ class PruneResult:
 def prune_plan(
     plan: InvestigationPlan, alert: Alert, topology: TopologySnapshot | CausalGraph
 ) -> PruneResult:
-    graph = (
-        topology
-        if isinstance(topology, CausalGraph)
-        else CausalGraph.from_snapshot(topology)
-    )
+    graph = topology if isinstance(topology, CausalGraph) else CausalGraph.from_snapshot(topology)
     focus = alert.expected_focus_service or alert.service
     known = graph.known_services()
 
@@ -108,6 +104,5 @@ def _judge(
         return True, ""
     sorted_unreachable = sorted(unreachable)
     return False, (
-        f"no causal path from {focus} to any of {sorted_unreachable} "
-        f"in the causal dependency graph"
+        f"no causal path from {focus} to any of {sorted_unreachable} in the causal dependency graph"
     )

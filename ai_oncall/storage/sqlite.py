@@ -18,7 +18,12 @@ from ai_oncall.storage import _sql
 from ai_oncall.storage.base import TelemetryStore
 
 # SQLite percentile fallback: pick the worst observation in the bucket.
-_SQLITE_AGG = {**_sql.METRIC_AGG_SQL, "p50": "max(metric_value)", "p95": "max(metric_value)", "p99": "max(metric_value)"}
+_SQLITE_AGG = {
+    **_sql.METRIC_AGG_SQL,
+    "p50": "max(metric_value)",
+    "p95": "max(metric_value)",
+    "p99": "max(metric_value)",
+}
 
 
 def _regex(pattern: str, value: str | None) -> int:
@@ -44,13 +49,28 @@ class SqliteStore(TelemetryStore):
         rows = []
         for r in records:
             if r.tenant_id != tenant_id:
-                raise ValueError(f"record tenant_id={r.tenant_id!r} does not match scope {tenant_id!r}")
-            rows.append((
-                r.tenant_id, r.kind, r.service, r.timestamp.isoformat(),
-                r.trace_id, r.span_id, r.parent_span_id, r.name,
-                r.duration_ms, r.status, r.metric_value, r.metric_unit,
-                r.severity, r.body, json.dumps(r.attributes),
-            ))
+                raise ValueError(
+                    f"record tenant_id={r.tenant_id!r} does not match scope {tenant_id!r}"
+                )
+            rows.append(
+                (
+                    r.tenant_id,
+                    r.kind,
+                    r.service,
+                    r.timestamp.isoformat(),
+                    r.trace_id,
+                    r.span_id,
+                    r.parent_span_id,
+                    r.name,
+                    r.duration_ms,
+                    r.status,
+                    r.metric_value,
+                    r.metric_unit,
+                    r.severity,
+                    r.body,
+                    json.dumps(r.attributes),
+                )
+            )
         self._conn.executemany(_sql.INSERT_TELEMETRY, rows)
         self._conn.commit()
 
@@ -84,9 +104,7 @@ class SqliteStore(TelemetryStore):
         ).fetchall()
         return [_row_to_record(r) for r in rows]
 
-    def recent_deploys(
-        self, tenant_id: str, service: str, since: datetime
-    ) -> list[ChangeEvent]:
+    def recent_deploys(self, tenant_id: str, service: str, since: datetime) -> list[ChangeEvent]:
         rows = self._conn.execute(
             _sql.QUERY_RECENT_DEPLOYS, (tenant_id, service, since.isoformat())
         ).fetchall()
@@ -102,21 +120,40 @@ class SqliteStore(TelemetryStore):
 
 
 def _row_to_record(row: tuple) -> TelemetryRecord:
-    return TelemetryRecord.model_validate({
-        "tenant_id": row[0], "kind": row[1], "service": row[2],
-        "timestamp": row[3], "trace_id": row[4], "span_id": row[5],
-        "parent_span_id": row[6], "name": row[7], "duration_ms": row[8],
-        "status": row[9], "metric_value": row[10], "metric_unit": row[11],
-        "severity": row[12], "body": row[13],
-        "attributes": json.loads(row[14]) if row[14] else {},
-    })
+    return TelemetryRecord.model_validate(
+        {
+            "tenant_id": row[0],
+            "kind": row[1],
+            "service": row[2],
+            "timestamp": row[3],
+            "trace_id": row[4],
+            "span_id": row[5],
+            "parent_span_id": row[6],
+            "name": row[7],
+            "duration_ms": row[8],
+            "status": row[9],
+            "metric_value": row[10],
+            "metric_unit": row[11],
+            "severity": row[12],
+            "body": row[13],
+            "attributes": json.loads(row[14]) if row[14] else {},
+        }
+    )
 
 
 def _row_to_change(row: tuple) -> ChangeEvent:
-    return ChangeEvent.model_validate({
-        "tenant_id": row[0], "event_id": row[1], "service": row[2],
-        "kind": row[3], "timestamp": row[4], "actor": row[5],
-        "title": row[6], "url": row[7], "sha": row[8],
-        "patch_excerpt": row[9],
-        "files_changed": json.loads(row[10]) if row[10] else [],
-    })
+    return ChangeEvent.model_validate(
+        {
+            "tenant_id": row[0],
+            "event_id": row[1],
+            "service": row[2],
+            "kind": row[3],
+            "timestamp": row[4],
+            "actor": row[5],
+            "title": row[6],
+            "url": row[7],
+            "sha": row[8],
+            "patch_excerpt": row[9],
+            "files_changed": json.loads(row[10]) if row[10] else [],
+        }
+    )

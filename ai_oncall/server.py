@@ -213,10 +213,10 @@ def metrics_endpoint() -> Response:
     lines = [
         "# HELP ai_oncall_jobs_total Total jobs by status.",
         "# TYPE ai_oncall_jobs_total gauge",
-        f"ai_oncall_jobs_total{{status=\"pending\"}} {counts.get('pending', 0)}",
-        f"ai_oncall_jobs_total{{status=\"running\"}} {counts.get('running', 0)}",
-        f"ai_oncall_jobs_total{{status=\"done\"}} {counts.get('done', 0)}",
-        f"ai_oncall_jobs_total{{status=\"failed\"}} {counts.get('failed', 0)}",
+        f'ai_oncall_jobs_total{{status="pending"}} {counts.get("pending", 0)}',
+        f'ai_oncall_jobs_total{{status="running"}} {counts.get("running", 0)}',
+        f'ai_oncall_jobs_total{{status="done"}} {counts.get("done", 0)}',
+        f'ai_oncall_jobs_total{{status="failed"}} {counts.get("failed", 0)}',
         "# HELP ai_oncall_jobs_failed_last_15m Jobs that landed in `failed` in the last 15 minutes.",
         "# TYPE ai_oncall_jobs_failed_last_15m gauge",
         f"ai_oncall_jobs_failed_last_15m {recent_failures}",
@@ -332,9 +332,7 @@ def incident_diff(report_id: str, other_id: str, request: Request) -> JSONRespon
             "tokens_out": getattr(inv, "tokens_out", None) if inv else None,
             "cost_usd": getattr(inv, "cost_usd", None) if inv else None,
             "abstained": (r.calibration.abstain if r.calibration else None),
-            "abstention_codes": (
-                [x.code for x in r.calibration.reasons] if r.calibration else []
-            ),
+            "abstention_codes": ([x.code for x in r.calibration.reasons] if r.calibration else []),
         }
 
     sa, sb = _summary(ra), _summary(rb)
@@ -344,9 +342,7 @@ def incident_diff(report_id: str, other_id: str, request: Request) -> JSONRespon
             "b": sb,
             "agreement": {
                 "same_root_cause": sa["top_root_cause_service"] == sb["top_root_cause_service"],
-                "confidence_delta": (
-                    (sa["top_confidence"] or 0) - (sb["top_confidence"] or 0)
-                ),
+                "confidence_delta": ((sa["top_confidence"] or 0) - (sb["top_confidence"] or 0)),
                 "same_tool_calls": sa["tool_call_signature"] == sb["tool_call_signature"],
                 "same_abstention_codes": sa["abstention_codes"] == sb["abstention_codes"],
             },
@@ -373,7 +369,11 @@ def slo_report(request: Request, limit: int = 50) -> JSONResponse:
         inv = report.investigation
         if inv is None:
             continue
-        ms = getattr(inv, "total_latency_ms", None) if not isinstance(inv, dict) else inv.get("total_latency_ms")
+        ms = (
+            getattr(inv, "total_latency_ms", None)
+            if not isinstance(inv, dict)
+            else inv.get("total_latency_ms")
+        )
         if ms is None and hasattr(inv, "model_extra") and inv.model_extra:
             ms = inv.model_extra.get("total_latency_ms")
         if ms is not None:
@@ -436,7 +436,9 @@ def incident_trace(report_id: str, request: Request) -> JSONResponse:
         {
             "report_id": report.report_id,
             "alert": report.alert.model_dump(mode="json"),
-            "tool_calls": [tc.model_dump(mode="json") for tc in (report.investigation.tool_calls or [])]
+            "tool_calls": [
+                tc.model_dump(mode="json") for tc in (report.investigation.tool_calls or [])
+            ]
             if getattr(report, "investigation", None) is not None
             else [],
             "hypotheses": [h.model_dump(mode="json") for h in report.hypotheses],
@@ -655,9 +657,7 @@ async def slack_event(request: Request) -> JSONResponse:
     if not report_id:
         report_id = _resolve_report_id_from_event(event) or event.get("report_id")
     if not report_id:
-        return JSONResponse(
-            {"ok": False, "ignored": "could not resolve report_id from thread"}
-        )
+        return JSONResponse({"ok": False, "ignored": "could not resolve report_id from thread"})
 
     incident = get_incident(report_id)
     if incident is None:
@@ -729,7 +729,7 @@ def _resolve_report_id_from_event(event: dict[str, Any]) -> str | None:
     if isinstance(msg, dict):
         candidates.append(str(msg.get("text", "")))
         for block in msg.get("blocks") or []:
-            for elt in (block.get("elements") or []):
+            for elt in block.get("elements") or []:
                 if isinstance(elt, dict) and elt.get("text"):
                     candidates.append(str(elt["text"]))
     if event.get("attachments"):

@@ -29,11 +29,19 @@ DEFAULT_WINDOW_MINUTES = 10
 def load_static(tenant_id: str, path: Path | None = None) -> TopologySnapshot:
     target = path or DEFAULT_PATH
     if not target.exists():
-        return TopologySnapshot(tenant_id=tenant_id, captured_at=datetime.now(timezone.utc), nodes=[], edges=[])
+        return TopologySnapshot(
+            tenant_id=tenant_id, captured_at=datetime.now(timezone.utc), nodes=[], edges=[]
+        )
     with target.open(encoding="utf-8") as f:
         raw: dict[str, Any] = yaml.safe_load(f) or {}
-    nodes = [TopologyNode(service=n["service"], status=n.get("status", "unknown")) for n in raw.get("nodes", [])]
-    edges = [TopologyEdge.model_validate({"from": e["from"], "to": e["to"]}) for e in raw.get("edges", [])]
+    nodes = [
+        TopologyNode(service=n["service"], status=n.get("status", "unknown"))
+        for n in raw.get("nodes", [])
+    ]
+    edges = [
+        TopologyEdge.model_validate({"from": e["from"], "to": e["to"]})
+        for e in raw.get("edges", [])
+    ]
     return TopologySnapshot(
         tenant_id=tenant_id,
         captured_at=datetime.now(timezone.utc),
@@ -52,9 +60,7 @@ def load_from_spans(
     captured_at = now or datetime.now(timezone.utc)
     since = captured_at - timedelta(minutes=window_minutes)
     spans = store.query_spans(tenant_id, since)
-    return from_spans(
-        tenant_id, spans, captured_at=captured_at, window_minutes=window_minutes
-    )
+    return from_spans(tenant_id, spans, captured_at=captured_at, window_minutes=window_minutes)
 
 
 def build(
@@ -68,9 +74,7 @@ def build(
     """Live spans first; fall back to topology.yaml when none are available."""
     if store is not None:
         try:
-            live = load_from_spans(
-                tenant_id, store, window_minutes=window_minutes, now=now
-            )
+            live = load_from_spans(tenant_id, store, window_minutes=window_minutes, now=now)
         except NotImplementedError:
             live = None
         if live is not None and live.nodes:

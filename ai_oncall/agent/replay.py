@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from ai_oncall.agent.run import run_rca
-from ai_oncall.learnings.incidents import IncidentRow, get_incident
+from ai_oncall.learnings.incidents import get_incident
 from ai_oncall.llm.client import LlmClient, MockLlm
 from ai_oncall.models import RcaReport
 from ai_oncall.storage.base import TelemetryStore

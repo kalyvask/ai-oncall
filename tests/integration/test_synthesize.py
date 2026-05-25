@@ -27,11 +27,19 @@ def test_synthesize_returns_schema_valid_report() -> None:
     from ai_oncall.agent.prompts import synthesize_v1
 
     expected_text = json.dumps(expected)
-    mock = MockLlm(fixtures={
-        synthesize_v1.SYSTEM_PROMPT[:60]: {"text": expected_text, "tokens_in": 4812, "tokens_out": 612}
-    })
+    mock = MockLlm(
+        fixtures={
+            synthesize_v1.SYSTEM_PROMPT[:60]: {
+                "text": expected_text,
+                "tokens_in": 4812,
+                "tokens_out": 612,
+            }
+        }
+    )
 
-    report = synthesize(alert, context={"deploys": [], "topology": {}, "logs": [], "metrics": []}, llm=mock)
+    report = synthesize(
+        alert, context={"deploys": [], "topology": {}, "logs": [], "metrics": []}, llm=mock
+    )
     validate("rca_report", report.model_dump(mode="json", by_alias=True, exclude_none=True))
     assert report.hypotheses[0].root_cause_service == "payment"
     assert report.hypotheses[0].confidence >= report.hypotheses[-1].confidence
@@ -49,9 +57,15 @@ def test_synthesize_falls_back_to_uuid_and_now() -> None:
     expected.pop("generated_at")
     from ai_oncall.agent.prompts import synthesize_v1
 
-    mock = MockLlm(fixtures={
-        synthesize_v1.SYSTEM_PROMPT[:60]: {"text": json.dumps(expected), "tokens_in": 100, "tokens_out": 50}
-    })
+    mock = MockLlm(
+        fixtures={
+            synthesize_v1.SYSTEM_PROMPT[:60]: {
+                "text": json.dumps(expected),
+                "tokens_in": 100,
+                "tokens_out": 50,
+            }
+        }
+    )
 
     report = synthesize(alert, context={}, llm=mock)
     assert report.report_id  # generated

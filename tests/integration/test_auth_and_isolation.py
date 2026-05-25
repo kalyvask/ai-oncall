@@ -36,9 +36,7 @@ REPO = Path(__file__).resolve().parents[2]
 
 
 def _alert_payload() -> dict:
-    return json.loads(
-        (REPO / "fixtures/synthetic_alerts/checkout_regression.json").read_text()
-    )
+    return json.loads((REPO / "fixtures/synthetic_alerts/checkout_regression.json").read_text())
 
 
 def _report_for_tenant(tenant: str, report_id: str) -> RcaReport:

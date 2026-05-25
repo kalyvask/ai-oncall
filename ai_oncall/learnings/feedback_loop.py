@@ -34,7 +34,6 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import Iterator, Optional
 
@@ -134,9 +133,7 @@ def export_cases(
     seen: set[str] = set()
     written: list[FeedbackCase] = []
 
-    for record in iter_negative_records(
-        learnings_path=learnings_path, tenant_id=tenant_id
-    ):
+    for record in iter_negative_records(learnings_path=learnings_path, tenant_id=tenant_id):
         # One case per (report_id, reaction). If the user reacted twice with
         # the same negative label, the later one wins.
         dedupe_key = f"{record.report_id}:{record.reaction}"

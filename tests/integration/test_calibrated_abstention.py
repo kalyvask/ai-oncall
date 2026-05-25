@@ -9,7 +9,7 @@ Slack/HTML surfaces a clear "low confidence" signal.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 from ai_oncall.agent.calibration import (
@@ -62,7 +62,9 @@ def test_calibration_records_accepted_when_no_rules_fire() -> None:
     new, result = calibrate(
         report,
         recent_deploys=recent_deploys,
-        past_incidents=[{"root_cause_service": h.root_cause_service, "root_cause_class": "deploy_regression"}],
+        past_incidents=[
+            {"root_cause_service": h.root_cause_service, "root_cause_class": "deploy_regression"}
+        ],
         tool_calls_used=4,
     )
     assert result.abstain is False
@@ -95,7 +97,9 @@ def test_no_rules_fire_when_signals_are_strong() -> None:
     new, result = calibrate(
         report,
         recent_deploys=recent_deploys,
-        past_incidents=[{"root_cause_service": h.root_cause_service, "root_cause_class": "deploy_regression"}],
+        past_incidents=[
+            {"root_cause_service": h.root_cause_service, "root_cause_class": "deploy_regression"}
+        ],
         tool_calls_used=4,
     )
     assert result.abstain is False
@@ -111,7 +115,9 @@ def test_confidence_floor_fires_below_threshold() -> None:
 
     new, result = calibrate(
         report,
-        recent_deploys=[{"service": h.root_cause_service, "timestamp": datetime.now(timezone.utc).isoformat()}],
+        recent_deploys=[
+            {"service": h.root_cause_service, "timestamp": datetime.now(timezone.utc).isoformat()}
+        ],
         past_incidents=[{"root_cause_service": h.root_cause_service, "root_cause_class": "x"}],
         tool_calls_used=1,
     )
@@ -145,7 +151,9 @@ def test_budget_exhausted_fires_when_tool_cap_hit_without_convergence() -> None:
 
     new, result = calibrate(
         report,
-        recent_deploys=[{"service": h.root_cause_service, "timestamp": datetime.now(timezone.utc).isoformat()}],
+        recent_deploys=[
+            {"service": h.root_cause_service, "timestamp": datetime.now(timezone.utc).isoformat()}
+        ],
         past_incidents=[{"root_cause_service": h.root_cause_service, "root_cause_class": "x"}],
         tool_calls_used=8,  # exhausted
     )
@@ -176,7 +184,9 @@ def test_two_strong_leads_fires_on_competing_services() -> None:
 
     new, result = calibrate(
         report,
-        recent_deploys=[{"service": "checkout", "timestamp": datetime.now(timezone.utc).isoformat()}],
+        recent_deploys=[
+            {"service": "checkout", "timestamp": datetime.now(timezone.utc).isoformat()}
+        ],
         past_incidents=[{"root_cause_service": "checkout", "root_cause_class": "x"}],
         tool_calls_used=4,
     )
@@ -187,13 +197,9 @@ def test_two_leads_does_not_fire_for_same_service() -> None:
     """Two hypotheses on the same service are competing on phrasing, not
     independent. They should not trigger the tie rule."""
     report = _report()
-    h1 = report.hypotheses[0].model_copy(
-        update={"root_cause_service": "x", "confidence": 0.8}
-    )
+    h1 = report.hypotheses[0].model_copy(update={"root_cause_service": "x", "confidence": 0.8})
     h2 = (
-        report.hypotheses[1].model_copy(
-            update={"root_cause_service": "x", "confidence": 0.7}
-        )
+        report.hypotheses[1].model_copy(update={"root_cause_service": "x", "confidence": 0.7})
         if len(report.hypotheses) >= 2
         else h1
     )

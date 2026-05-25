@@ -66,7 +66,10 @@ def downgrade_unsafe_tier(
     if tier == "auto" and not policy.can_auto(kind):
         if policy.can_propose(kind):
             return "propose", f"kind={kind} is not on the auto whitelist; downgraded to propose."
-        return "recommend", f"kind={kind} is not on the auto or propose whitelist; downgraded to recommend."
+        return (
+            "recommend",
+            f"kind={kind} is not on the auto or propose whitelist; downgraded to recommend.",
+        )
     if tier == "propose" and not policy.can_propose(kind):
         return "recommend", f"kind={kind} is not on the propose whitelist; downgraded to recommend."
     return tier, None

@@ -151,6 +151,9 @@ def from_spans(
     from ai_oncall.topology.from_spans import from_spans as _build
 
     snapshot = _build(
-        tenant_id, spans, captured_at=captured_at, window_minutes=window_minutes  # type: ignore[arg-type]
+        tenant_id,
+        spans,
+        captured_at=captured_at,
+        window_minutes=window_minutes,  # type: ignore[arg-type]
     )
     return CausalGraph.from_snapshot(snapshot)

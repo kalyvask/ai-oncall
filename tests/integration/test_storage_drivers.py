@@ -22,28 +22,51 @@ TENANT_A, TENANT_B = "alpha", "bravo"
 def _records(tenant: str) -> list[TelemetryRecord]:
     return [
         TelemetryRecord(
-            tenant_id=tenant, kind="metric", service="payment", timestamp=T0,
-            name="http.server.duration", metric_value=1100.0, metric_unit="ms",
+            tenant_id=tenant,
+            kind="metric",
+            service="payment",
+            timestamp=T0,
+            name="http.server.duration",
+            metric_value=1100.0,
+            metric_unit="ms",
         ),
         TelemetryRecord(
-            tenant_id=tenant, kind="metric", service="payment", timestamp=T0,
-            name="http.server.duration", metric_value=2200.0, metric_unit="ms",
+            tenant_id=tenant,
+            kind="metric",
+            service="payment",
+            timestamp=T0,
+            name="http.server.duration",
+            metric_value=2200.0,
+            metric_unit="ms",
         ),
         TelemetryRecord(
-            tenant_id=tenant, kind="log", service="payment", timestamp=T0,
-            severity="error", body="TypeError: charges.create() takes 0 positional arguments but 1 given",
+            tenant_id=tenant,
+            kind="log",
+            service="payment",
+            timestamp=T0,
+            severity="error",
+            body="TypeError: charges.create() takes 0 positional arguments but 1 given",
         ),
         TelemetryRecord(
-            tenant_id=tenant, kind="log", service="payment", timestamp=T0,
-            severity="info", body="hello world",
+            tenant_id=tenant,
+            kind="log",
+            service="payment",
+            timestamp=T0,
+            severity="info",
+            body="hello world",
         ),
     ]
 
 
 def _change(tenant: str) -> ChangeEvent:
     return ChangeEvent(
-        tenant_id=tenant, event_id="abc1234", service="payment",
-        kind="pr_merged", timestamp=T0, actor="alice", title="bump stripe SDK",
+        tenant_id=tenant,
+        event_id="abc1234",
+        service="payment",
+        kind="pr_merged",
+        timestamp=T0,
+        actor="alice",
+        title="bump stripe SDK",
     )
 
 

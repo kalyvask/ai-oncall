@@ -25,14 +25,16 @@ QUERY_PARAM = "tenant"
 # /webhooks/slack/* is public because Slack signs each request with its own
 # secret and we recover the tenant from the persisted incident referenced in
 # the action payload. No tenant header is possible from Slack's side.
-PUBLIC_PATHS: frozenset[str] = frozenset({
-    "/health",
-    "/ready",
-    "/metrics",
-    "/docs",
-    "/openapi.json",
-    "/redoc",
-})
+PUBLIC_PATHS: frozenset[str] = frozenset(
+    {
+        "/health",
+        "/ready",
+        "/metrics",
+        "/docs",
+        "/openapi.json",
+        "/redoc",
+    }
+)
 PUBLIC_PATH_PREFIXES: tuple[str, ...] = ("/webhooks/slack/",)
 
 

@@ -106,7 +106,10 @@ def _maybe_export_langfuse(record: LlmCallRecord, *, prompt_hash: str) -> None:
                         "id": str(uuid.uuid4()),
                         "name": f"ai-oncall.{record.stage}",
                         "model": record.model_id,
-                        "input": {"prompt_hash": prompt_hash, "prompt_version": record.prompt_version},
+                        "input": {
+                            "prompt_hash": prompt_hash,
+                            "prompt_version": record.prompt_version,
+                        },
                         "usage": {
                             "input": record.tokens_in or 0,
                             "output": record.tokens_out or 0,

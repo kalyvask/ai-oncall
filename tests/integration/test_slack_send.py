@@ -88,9 +88,7 @@ def test_post_rca_persists_thread_mapping(tmp_incidents_db):
 
     result = post_rca(report, "C123", transport=transport)
 
-    looked_up = lookup_report_id_by_thread(
-        channel="C123", thread_ts=result.thread_ts
-    )
+    looked_up = lookup_report_id_by_thread(channel="C123", thread_ts=result.thread_ts)
     assert looked_up == report.report_id
 
 
@@ -134,9 +132,7 @@ def test_post_rca_raises_when_parent_response_lacks_ts(tmp_incidents_db):
 def test_post_thread_reply_round_trip(tmp_incidents_db):
     transport = _FakeTransport()
     blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": "x"}}]
-    ts = post_thread_reply(
-        channel="C1", thread_ts="170.001", blocks=blocks, transport=transport
-    )
+    ts = post_thread_reply(channel="C1", thread_ts="170.001", blocks=blocks, transport=transport)
     assert ts.startswith("17000")
     assert transport.calls[0]["thread_ts"] == "170.001"
     assert transport.calls[0]["blocks"] == blocks
@@ -147,7 +143,6 @@ def test_post_thread_reply_round_trip(tmp_incidents_db):
 
 def test_httpx_transport_raises_on_non_200(monkeypatch):
     """End-to-end of HttpxSlackTransport when Slack returns 5xx."""
-    import httpx
 
     transport = HttpxSlackTransport("xoxb-test")
 

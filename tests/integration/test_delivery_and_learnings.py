@@ -31,7 +31,11 @@ def test_slack_parent_has_required_blocks() -> None:
     assert types[0] == "header"
     assert "divider" in types
     # At least one section with the recommended action verbatim.
-    actions = [b for b in blocks if b.get("type") == "section" and "Recommended" in b.get("text", {}).get("text", "")]
+    actions = [
+        b
+        for b in blocks
+        if b.get("type") == "section" and "Recommended" in b.get("text", {}).get("text", "")
+    ]
     assert actions, "parent block must surface the recommended action"
 
 
@@ -59,7 +63,10 @@ def test_learnings_round_trip(tmp_path, monkeypatch) -> None:
     record = learnings.append_from_report(report, reaction="thumbs_up")
     assert record.top_hypothesis == "payment"
 
-    matches = learnings.retrieve_similar(tenant_id=report.tenant_id, alert_title="checkout p99 latency 2.18s (threshold 1.5s) for 5 min")
+    matches = learnings.retrieve_similar(
+        tenant_id=report.tenant_id,
+        alert_title="checkout p99 latency 2.18s (threshold 1.5s) for 5 min",
+    )
     assert len(matches) == 1
     assert matches[0].top_hypothesis == "payment"
     # Tenant isolation: a different tenant gets nothing.

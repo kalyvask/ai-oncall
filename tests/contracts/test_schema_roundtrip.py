@@ -46,7 +46,9 @@ def test_rca_report_fixture_matches_schema_and_model(fixture: Path) -> None:
     assert parsed.tenant_id == payload["tenant_id"]
     assert 1 <= len(parsed.hypotheses) <= 5
     top = parsed.hypotheses[0]
-    assert top.confidence >= parsed.hypotheses[-1].confidence, "hypotheses must be ranked best-first"
+    assert top.confidence >= parsed.hypotheses[-1].confidence, (
+        "hypotheses must be ranked best-first"
+    )
 
 
 def test_all_schemas_load() -> None:

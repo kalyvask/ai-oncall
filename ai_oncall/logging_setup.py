@@ -21,11 +21,30 @@ class _JsonFormatter(logging.Formatter):
         if record.exc_info:
             payload["exc"] = self.formatException(record.exc_info)
         for key, value in record.__dict__.items():
-            if key.startswith("_") or key in {"args", "msg", "levelname", "levelno", "name", "pathname",
-                                              "filename", "module", "exc_info", "exc_text", "stack_info",
-                                              "lineno", "funcName", "created", "msecs", "relativeCreated",
-                                              "thread", "threadName", "processName", "process",
-                                              "getMessage", "taskName"}:
+            if key.startswith("_") or key in {
+                "args",
+                "msg",
+                "levelname",
+                "levelno",
+                "name",
+                "pathname",
+                "filename",
+                "module",
+                "exc_info",
+                "exc_text",
+                "stack_info",
+                "lineno",
+                "funcName",
+                "created",
+                "msecs",
+                "relativeCreated",
+                "thread",
+                "threadName",
+                "processName",
+                "process",
+                "getMessage",
+                "taskName",
+            }:
                 continue
             payload[key] = value
         return json.dumps(payload, default=str)
@@ -33,9 +52,11 @@ class _JsonFormatter(logging.Formatter):
 
 def configure() -> None:
     handler = logging.StreamHandler()
-    handler.setFormatter(_JsonFormatter() if settings.log_json else logging.Formatter(
-        "%(asctime)s %(levelname)-5s %(name)s — %(message)s"
-    ))
+    handler.setFormatter(
+        _JsonFormatter()
+        if settings.log_json
+        else logging.Formatter("%(asctime)s %(levelname)-5s %(name)s — %(message)s")
+    )
     root = logging.getLogger()
     root.handlers[:] = [handler]
     root.setLevel(logging.INFO)
