@@ -30,6 +30,7 @@ from typing import Any, Literal, Optional
 from urllib.parse import parse_qs
 
 from ai_oncall.delivery.cd_dispatch import dispatch_rollback
+from ai_oncall.learnings.audit import append_audit
 from ai_oncall.learnings.incidents import get_incident
 from ai_oncall.learnings import store as learnings_store
 from ai_oncall.learnings.store import LearningRecord
@@ -259,6 +260,38 @@ def _handle_approve_rollback(
         success=success,
         detail=detail,
     )
+    try:
+        append_audit(
+            tenant_id=incident.tenant_id,
+            report_id=report_id,
+            action_id="approve_rollback",
+            intent_proposal=(
+                f"rollback {top.staged_action.kind} on {top.staged_action.service}: "
+                f"{top.staged_action.rationale or top.recommended_action}"
+            ),
+            contextual_state={
+                "top_hypothesis_confidence": top.confidence,
+                "top_root_cause_service": top.root_cause_service,
+                "alert_severity": report.alert.severity,
+                "alert_service": report.alert.service,
+            },
+            policy_decision={
+                "tier": top.staged_action.tier,
+                "approver_user_id": user_id,
+                "approver_user_name": user_name,
+                "approval_source": "slack_block_kit",
+            },
+            execution_boundaries={
+                "kind": top.staged_action.kind,
+                "service": top.staged_action.service,
+                "params": top.staged_action.params,
+                "runbook_ref": top.staged_action.runbook_ref,
+                "dispatch_url_configured": bool(target_url),
+            },
+            actual_outcome={"success": success, "detail": detail},
+        )
+    except Exception:
+        logger.exception("audit_chain_append_failed", extra={"report_id": report_id})
     return ActionOutcome(
         action_id="approve_rollback",
         report_id=report_id,

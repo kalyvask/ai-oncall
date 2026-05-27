@@ -141,7 +141,9 @@ def _build_pair(scenario_name: str, gt: dict[str, Any]) -> tuple[Alert, RcaRepor
                 root_cause_datetime=fired_at,
                 confidence=1.0,
                 reasoning=reason or f"Injected fault: {scenario_name}",
-                evidence=[EvidenceItem(claim=reason or scenario_name, source=f"rcaeval:{scenario_name}")],
+                evidence=[
+                    EvidenceItem(claim=reason or scenario_name, source=f"rcaeval:{scenario_name}")
+                ],
                 recommended_action=action,
             )
         ],

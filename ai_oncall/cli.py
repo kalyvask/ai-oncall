@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import Optional
 
 import typer
 
@@ -282,6 +283,63 @@ def promote(
         typer.echo(f"no incident with report_id={report_id}")
         raise typer.Exit(1)
     typer.echo(f"promoted {report_id} -> trust_tier={tier}")
+
+
+audit_app = typer.Typer(help="Inspect the tamper-evident audit chain.")
+app.add_typer(audit_app, name="audit")
+
+
+@audit_app.command("list")
+def audit_list(
+    limit: int = typer.Option(20, "--limit", help="Show the last N records."),
+    path: Optional[Path] = typer.Option(
+        None, "--path", help="Override the default data/audit.jsonl path."
+    ),
+) -> None:
+    """Print the last N audit records as compact JSON."""
+    from ai_oncall.learnings.audit import iter_audit
+
+    rows = list(iter_audit(path))
+    if not rows:
+        typer.echo("(empty audit chain)")
+        return
+    tail = rows[-limit:]
+    for row in tail:
+        typer.echo(
+            json.dumps(
+                {
+                    "ts": row.timestamp,
+                    "report_id": row.report_id,
+                    "action_id": row.action_id,
+                    "tenant_id": row.tenant_id,
+                    "outcome": row.actual_outcome.get("success"),
+                    "detail": row.actual_outcome.get("detail"),
+                    "prev_hash": row.prev_hash[:12] + "…",
+                    "record_hash": row.record_hash[:12] + "…",
+                },
+                sort_keys=True,
+            )
+        )
+    typer.echo(f"\n{len(tail)} of {len(rows)} record(s)")
+
+
+@audit_app.command("verify")
+def audit_verify(
+    path: Optional[Path] = typer.Option(
+        None, "--path", help="Override the default data/audit.jsonl path."
+    ),
+) -> None:
+    """Re-walk the audit chain and exit non-zero if any link is broken."""
+    from ai_oncall.learnings.audit import verify_chain
+
+    result = verify_chain(path)
+    if result.ok:
+        typer.echo(f"OK: {result.rows_checked} record(s) verified")
+        return
+    typer.echo(f"BROKEN at index {result.broken_at_index}: {result.reason}", err=True)
+    typer.echo(f"  broken indices: {result.broken_rows}", err=True)
+    typer.echo(f"  rows_checked  : {result.rows_checked}", err=True)
+    raise typer.Exit(1)
 
 
 if __name__ == "__main__":

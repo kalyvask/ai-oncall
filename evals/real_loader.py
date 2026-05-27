@@ -60,7 +60,8 @@ def score_real_case(
     """Two binary scores. Aggregate across the benchmark for accuracy."""
     return {
         "service_match": 1.0
-        if predicted_top_service.lower().strip() == case.expected_top_root_cause_service.lower().strip()
+        if predicted_top_service.lower().strip()
+        == case.expected_top_root_cause_service.lower().strip()
         else 0.0,
         "class_match": 1.0
         if (predicted_root_cause_class or "").lower().strip()

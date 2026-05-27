@@ -21,11 +21,14 @@ on them. Schemas first, evals first, no surprise vendor lock-in.
 
 > Status: durable pipeline wired end-to-end; real Anthropic adapter (Haiku 4.5
 > default, structured-output + retry-on-429/5xx + per-instance cost ceiling).
-> Tests: 280 green. Eval: 6 synthetic fault families, 5 starter cases from
+> Tests: 296 green. Eval: 6 synthetic fault families, 5 starter cases from
 > public postmortems (Cloudflare 2022, Datadog 2023, AWS 2021, GitHub 2018,
 > Atlassian 2022), plus RCAEval RE3-OB and OpenRCA Bank loaders for
-> standardized real-data benchmarks. CI fails on > 5 pp drop vs the previous
-> run.
+> standardized real-data benchmarks. Live model comparison mode
+> (`--model-compare`) for head-to-head RCA-synthesis scoring across
+> providers. Tamper-evident audit chain on every state-changing action
+> (5-tuple + SHA-256 chain in `data/audit.jsonl`, `ai-oncall audit verify`).
+> CI fails on > 5 pp drop vs the previous run.
 
 The product contract lives in [BRIEF.md](BRIEF.md). The visual contract for
 the Next.js UI lives in [UI_DESIGN.md](UI_DESIGN.md). Read those before
@@ -109,7 +112,7 @@ below for full env-var details and the install commands.
 ```bash
 # Backend
 pip install -e ".[dev]"
-pytest                                                # 280 tests
+pytest                                                # 296 tests
 python -m evals.harness                               # synthetic eval, 6 cases
 python -m evals.harness --emit-json runs/today.json   # snapshot for drift baseline
 python -m evals.harness --baseline runs/today.json    # fail on > 5 pp drop
@@ -293,7 +296,33 @@ decision moment without leaving Slack:
 ai-oncall replay <report_id>                       # one incident, exit 1 on regression
 ai-oncall replay --batch-from runs/curated.txt     # CI form (one id per line)
 ai-oncall replay <report_id> --json --no-fail-on-regression  # snapshot for diffing
+
+ai-oncall audit list --limit 20                    # last N entries from the chain
+ai-oncall audit verify                             # re-walks chain, exit 1 on break
 ```
+
+### Tamper-evident audit chain
+
+Every state-changing action (today: `approve_rollback` via the Slack
+Block Kit button; the same hook fires for future `auto`-tier dispatches)
+is appended to `data/audit.jsonl` as an `AuditRecord` with five
+governance fields plus a SHA-256 hash chain:
+
+| Field | What it captures |
+|---|---|
+| `intent_proposal` | What the agent or approver intended (the action + rationale) |
+| `contextual_state` | Top hypothesis confidence, root cause service, alert severity |
+| `policy_decision` | Tier (`propose` / `auto`), approver identity, approval source |
+| `execution_boundaries` | Action kind, target service, params, runbook ref |
+| `actual_outcome` | Success boolean + detail (dispatched, dry-run, error) |
+
+`record_hash = sha256(prev_hash || canonical_json(fields))`. First row
+links to a 64-zero genesis hash. `ai-oncall audit verify` re-walks the
+file and reports the first index where the chain breaks — sufficient to
+detect insertion, deletion, in-place edit, or reordering without a
+separate signing infrastructure. Pair with the existing HMAC-signed CD
+dispatch (`delivery/cd_dispatch.py`) for sender authentication on the
+wire.
 
 ### Slack endpoints
 
@@ -426,6 +455,27 @@ download. Set `AI_ONCALL_EVAL_EMBED=transformers` and install the optional
 extra (`pip install -e ".[eval-embeddings]"`) to switch to
 `sentence-transformers/all-MiniLM-L6-v2` embeddings — same 0.5 threshold,
 much better recall on paraphrases.
+
+### Model comparison
+
+```bash
+# Single-shot live predictions across N models on the synthetic track.
+# Requires ANTHROPIC_API_KEY. Emits a Markdown table to stdout (also writes
+# the file when --model-compare-output is given).
+ANTHROPIC_API_KEY=sk-... python -m evals.harness \
+  --model-compare claude-haiku,claude-sonnet,claude-opus \
+  --model-compare-output runs/model_compare.md
+```
+
+Each model gets the alert plus a terse summary of the expected
+investigation trail, then produces a one-shot RCA. The table reports
+`component_match`, `top_3_accuracy`, `reason_cosine`,
+`escalation_precision`, average cost per case, and parse failures. This
+evaluates *RCA synthesis quality under perfect context*, not the full
+tool-using agent loop — same comparison surface across models, no token
+budget burned on tool calls. The full agent path is the default replay
+mode; swap `_predict` in `evals/harness.py` for `agent.run.run_rca`
+when scoring real investigation skill instead.
 
 ## LLM observability
 

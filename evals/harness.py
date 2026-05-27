@@ -72,7 +72,9 @@ def _predict(_alert: Alert, expected: RcaReport) -> RcaReport:
 def _load_case(path: Path) -> CaseResult:
     with path.open(encoding="utf-8") as f:
         case = json.load(f)
-    expected = RcaReport.model_validate_json((REPO / case["expected_fixture"]).read_text(encoding="utf-8"))
+    expected = RcaReport.model_validate_json(
+        (REPO / case["expected_fixture"]).read_text(encoding="utf-8")
+    )
     predicted = _predict(expected.alert, expected)
     return CaseResult(
         case_id=case["case_id"],
@@ -191,10 +193,46 @@ def render(results: list[CaseResult], aggregates: dict[str, float]) -> str:
 def render_regressions(regressions: list[Regression]) -> str:
     lines = ["scope\tmetric\tbaseline\tcurrent\tdelta"]
     for r in sorted(regressions, key=lambda x: (x.scope, x.metric)):
-        lines.append(
-            f"{r.scope}\t{r.metric}\t{r.baseline:.3f}\t{r.current:.3f}\t{r.delta:+.3f}"
-        )
+        lines.append(f"{r.scope}\t{r.metric}\t{r.baseline:.3f}\t{r.current:.3f}\t{r.delta:+.3f}")
     return "\n".join(lines)
+
+
+def _load_synthetic_cases() -> list[tuple[str, str, Alert, RcaReport]]:
+    """Iterate (case_id, family, alert, expected) for the synthetic track."""
+    out: list[tuple[str, str, Alert, RcaReport]] = []
+    for path in sorted(CASES_DIR.glob("*.json")):
+        with path.open(encoding="utf-8") as f:
+            case = json.load(f)
+        expected = RcaReport.model_validate_json(
+            (REPO / case["expected_fixture"]).read_text(encoding="utf-8")
+        )
+        out.append((case["case_id"], case["family"], expected.alert, expected))
+    return out
+
+
+def _run_model_compare(spec: str, output_path: Path | None) -> int:
+    """Run the synthetic track once per model alias and print a Markdown table."""
+    from evals.model_compare import render_markdown, run_model
+
+    aliases = [a.strip() for a in spec.split(",") if a.strip()]
+    if not aliases:
+        print("ERROR: --model-compare expects a comma-separated list of aliases", file=sys.stderr)  # noqa: T201
+        return 2
+
+    cases = _load_synthetic_cases()
+    runs = []
+    for alias in aliases:
+        print(f"running {alias} over {len(cases)} synthetic case(s)…", file=sys.stderr)  # noqa: T201
+        runs.append(run_model(alias, cases))
+
+    table = render_markdown(runs)
+    print(table)  # noqa: T201
+
+    if output_path:
+        output_path.write_text(table + "\n", encoding="utf-8")
+        print(f"\nWrote {output_path}", file=sys.stderr)  # noqa: T201
+
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -212,7 +250,7 @@ def main(argv: list[str] | None = None) -> int:
         "--baseline",
         type=Path,
         help="Compare current run against this previous JSON snapshot. "
-             "Exits non-zero on any per-metric per-family drop > --regression-threshold.",
+        "Exits non-zero on any per-metric per-family drop > --regression-threshold.",
     )
     parser.add_argument(
         "--regression-threshold",
@@ -220,7 +258,26 @@ def main(argv: list[str] | None = None) -> int:
         default=REGRESSION_THRESHOLD,
         help=f"Absolute drop that counts as a regression (default {REGRESSION_THRESHOLD}).",
     )
+    parser.add_argument(
+        "--model-compare",
+        type=str,
+        default=None,
+        help=(
+            "Comma-separated model aliases to compare on the synthetic track using "
+            "live single-shot predictions (e.g. claude-haiku,claude-sonnet,claude-opus). "
+            "Requires ANTHROPIC_API_KEY. Emits a Markdown comparison table to stdout."
+        ),
+    )
+    parser.add_argument(
+        "--model-compare-output",
+        type=Path,
+        default=None,
+        help="Write the Markdown comparison table to this file in addition to stdout.",
+    )
     args = parser.parse_args(argv)
+
+    if args.model_compare:
+        return _run_model_compare(args.model_compare, args.model_compare_output)
 
     if args.track == "synthetic":
         results = run()
