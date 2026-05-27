@@ -338,16 +338,3 @@ So you don't waste cycles or overbuild.
 - **No streaming-by-default**, no WebSockets in v1. The UI polls the API.
   Add WS only if eval shows it materially improves Sam's 60-second flow.
 
----
-
-## 13. Ask before deciding
-
-Stop and ask before:
-
-- choosing the final product name (`ai-oncall` is a placeholder),
-- picking the default model and the cost ceiling,
-- naming the GitHub repo,
-- adding any new top-level dependency beyond what's in this brief.
-
-Everything else is your call. Bias to small commits, contract tests, and
-honest commit messages.

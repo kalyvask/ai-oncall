@@ -487,53 +487,6 @@ are produced by `agent/observability.py:LlmTracer`; an external sink
 (Langfuse / Helicone / OTel-LLM) plugs in by reading the same list and is
 on the roadmap.
 
-## Roadmap
-
-Recently landed (see commit history for details): durable alert→RCA→Slack
-job pipeline with idempotency and retries; real Anthropic adapter with
-JSON-mode and cost ceiling; action allowlist + dry-run preview for propose
-tier; `/metrics`, `/ready`, `/sloreport`, `/incidents/{id}/diff/{other}`;
-HMAC-signed inbound webhooks; per-tenant bearer-token auth; PII/secret
-redaction before LLM calls; optional Langfuse export; Dockerfile +
-docker-compose stack.
-
-1. Sandboxed runner for the `auto` tier (the allowlist + dry-run preview
-   landed; the sandboxed execution layer is the next step).
-2. APM/traces backend for the `live` driver (Honeycomb or Datadog), so
-   the dynamic topology builder works end-to-end without a separate OTel
-   ingest path.
-3. Embeddings-backed past-incident retrieval, replacing the SQL `LIKE`
-   in `learnings/store.py`.
-4. Multi-alert correlation and deduplication before the agent spends
-   tokens.
-5. Specialist sub-agents (K8s, AWS, metrics, code) with a parallel
-   router.
-6. Swap `evals/harness.py:_predict` for `agent.run.run_rca` on the
-   `rcaeval` / `openrca` tracks so the benchmarks score the real agent
-   instead of running in replay mode.
-7. Confidence tiers in the RCA output, mapped onto the existing
-   ranked-hypothesis schema.
-8. Post-mortem auto-draft plus Jira / Linear ticket creation for
-   follow-ups.
-9. Anomaly detection on SLIs and post-deploy verification.
-10. MCP server, so Cursor and Claude Desktop can drive investigations.
-11. Auto-degrade to a cheaper model at 80% of `AI_ONCALL_COST_CEILING_USD`
-    (the cost ceiling itself is enforced today via `LlmBudgetExceeded`).
-12. PagerDuty / incident.io ingest, replacing the synthetic webhook in
-    `ingest/alerts.py`.
-
-## Open decisions (BRIEF.md §13 — ask before deciding)
-
-1. **Final product name.** `ai-oncall` is a placeholder.
-2. **Default model + cost ceiling.** `claude-haiku-4-5-20251001` and `$0.50`
-   per RCA today. Configurable via `AI_ONCALL_RCA_MODEL` /
-   `AI_ONCALL_COST_CEILING_USD`.
-3. **GitHub repo name** if this one is meant as a placeholder.
-4. **Auto-action whitelist scope.** `agent/staging.py` whitelists only
-   `rollback` for the `auto` tier today, gated by confidence ≥ 0.85 and
-   page severity. Adding `restart`, `scale`, or `feature_flag` to the
-   whitelist needs eval coverage of the false-positive rate first.
-
 ## License
 
 MIT, see [LICENSE](LICENSE).

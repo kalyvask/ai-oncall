@@ -65,7 +65,7 @@ def rca(
     alert = receive_from_file(alert_path)
     if fixture_report is None:
         raise typer.BadParameter(
-            "live LLM is not wired yet (BRIEF.md §13 asks before adding it). "
+            "live LLM is not wired through `ai-oncall rca` yet. "
             "Pass --fixture-report to replay a canned report via MockLlm."
         )
     report_text = fixture_report.read_text(encoding="utf-8")
