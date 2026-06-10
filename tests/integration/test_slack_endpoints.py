@@ -212,7 +212,16 @@ def test_warn_unsafe_settings_flags_missing_slack_secret(monkeypatch):
     assert any("SLACK_SIGNING_SECRET" in w for w in warnings)
 
 
+def test_warn_unsafe_settings_flags_missing_webhook_secret(monkeypatch):
+    monkeypatch.setattr(settings_module.settings, "cd_dispatch_url", None)
+    monkeypatch.setattr(settings_module.settings, "slack_signing_secret", "x")
+    monkeypatch.setattr(settings_module.settings, "webhook_signing_secret", None)
+    warnings = settings_module.warn_unsafe_settings()
+    assert any("WEBHOOK_SIGNING_SECRET" in w for w in warnings)
+
+
 def test_warn_unsafe_settings_silent_when_configured(monkeypatch):
     monkeypatch.setattr(settings_module.settings, "cd_dispatch_url", None)
     monkeypatch.setattr(settings_module.settings, "slack_signing_secret", "x")
+    monkeypatch.setattr(settings_module.settings, "webhook_signing_secret", "x")
     assert settings_module.warn_unsafe_settings() == []
