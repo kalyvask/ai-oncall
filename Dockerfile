@@ -19,15 +19,22 @@ RUN groupadd --system --gid 10001 oncall \
 
 WORKDIR /app
 
-# Install Python deps first so layer cache survives source edits.
+# Install third-party deps first so the layer cache survives source edits.
+# `pip install .` can't run here — hatchling refuses to build a wheel before
+# the ai_oncall/ source is copied in — so extract the dependency list from
+# pyproject.toml and install just those.
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir --upgrade pip \
- && pip install --no-cache-dir . anthropic httpx
+ && python -c "import tomllib; print('\n'.join(tomllib.load(open('pyproject.toml','rb'))['project']['dependencies']))" > /tmp/requirements.txt \
+ && pip install --no-cache-dir -r /tmp/requirements.txt anthropic httpx
 
 COPY ai_oncall ./ai_oncall
 COPY schemas ./schemas
 COPY runbooks ./runbooks
 COPY topology.yaml ./topology.yaml
+
+# Source is present now; install the package itself without re-resolving deps.
+RUN pip install --no-cache-dir --no-deps .
 
 # Copy the built Next.js bundle into /app/web so a future static handler
 # (or a reverse-proxy sidecar) can serve it. The FastAPI process itself
