@@ -15,9 +15,9 @@ incident-response surface area touches:
 
 Two modes:
 
-- ``redact_in_place(text)`` — substitute matches with a fixed placeholder.
-  Default for prompts.
-- ``has_secrets(text)`` — boolean, used by ``raw_logs_blocked`` mode where
+- ``redact(text)`` — substitute matches with a fixed placeholder and report
+  which rules fired. Default for prompts.
+- ``has_secrets(text)`` — boolean, used by ``raw_secrets_blocked`` mode where
   we refuse to send raw log bodies that contain secrets to the model.
 
 The pack is intentionally conservative: false positives are tolerable here,

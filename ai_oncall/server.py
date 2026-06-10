@@ -257,10 +257,8 @@ def jobs_list(request: Request, status: str | None = None, limit: int = 50) -> J
 def job_status(job_id: str, request: Request) -> JSONResponse:
     """Return the current job status. Restricted to the request's tenant."""
     tenant_id: str = request.state.tenant_id
-    job = get_job(job_id)
+    job = get_job(job_id, tenant_id=tenant_id)
     if job is None:
-        raise HTTPException(404, f"no job for id={job_id}")
-    if job.tenant_id != tenant_id:
         raise HTTPException(404, f"no job for id={job_id}")
     return JSONResponse(
         {
@@ -309,11 +307,11 @@ def incident_diff(report_id: str, other_id: str, request: Request) -> JSONRespon
     investigation cost/latency, and tool-call signatures. Both incidents
     must belong to the request's tenant."""
     tenant_id: str = request.state.tenant_id
-    a = get_incident(report_id)
-    b = get_incident(other_id)
-    if a is None or a.tenant_id != tenant_id:
+    a = get_incident(report_id, tenant_id=tenant_id)
+    b = get_incident(other_id, tenant_id=tenant_id)
+    if a is None:
         raise HTTPException(404, f"no incident for id={report_id}")
-    if b is None or b.tenant_id != tenant_id:
+    if b is None:
         raise HTTPException(404, f"no incident for id={other_id}")
     ra, rb = a.report(), b.report()
 
@@ -419,8 +417,8 @@ def slo_report(request: Request, limit: int = 50) -> JSONResponse:
 @app.get("/incidents/{report_id}")
 def incident_detail(report_id: str, request: Request) -> JSONResponse:
     tenant_id: str = request.state.tenant_id
-    incident = get_incident(report_id)
-    if incident is None or incident.tenant_id != tenant_id:
+    incident = get_incident(report_id, tenant_id=tenant_id)
+    if incident is None:
         raise HTTPException(404, f"no incident for id={report_id}")
     return JSONResponse(incident.report().model_dump(mode="json"))
 
@@ -429,8 +427,8 @@ def incident_detail(report_id: str, request: Request) -> JSONResponse:
 def incident_trace(report_id: str, request: Request) -> JSONResponse:
     """Return just the tool-call trace + reasoning for the UI's trace panel."""
     tenant_id: str = request.state.tenant_id
-    incident = get_incident(report_id)
-    if incident is None or incident.tenant_id != tenant_id:
+    incident = get_incident(report_id, tenant_id=tenant_id)
+    if incident is None:
         raise HTTPException(404, f"no incident for id={report_id}")
     report = incident.report()
     return JSONResponse(
@@ -465,8 +463,8 @@ async def approve_action(report_id: str, request: Request) -> JSONResponse:
     from ai_oncall.delivery.reactions import _audit_action
 
     tenant_id: str = request.state.tenant_id
-    incident = get_incident(report_id)
-    if incident is None or incident.tenant_id != tenant_id:
+    incident = get_incident(report_id, tenant_id=tenant_id)
+    if incident is None:
         raise HTTPException(404, f"no incident for id={report_id}")
     report = incident.report()
     top = report.hypotheses[0] if report.hypotheses else None
@@ -529,8 +527,8 @@ async def feedback_endpoint(request: Request) -> JSONResponse:
     reaction = payload.get("reaction")
     if not report_id or not reaction:
         raise HTTPException(400, "report_id and reaction are required")
-    incident = get_incident(report_id)
-    if incident is None or incident.tenant_id != tenant_id:
+    incident = get_incident(report_id, tenant_id=tenant_id)
+    if incident is None:
         raise HTTPException(404, f"no incident for id={report_id}")
     report = incident.report()
     record = LearningRecord(
@@ -663,6 +661,9 @@ async def slack_event(request: Request) -> JSONResponse:
     if not report_id:
         return JSONResponse({"ok": False, "ignored": "could not resolve report_id from thread"})
 
+    # No tenant_id filter here on purpose: this is the public, Slack-signed
+    # event path with no X-Tenant-Id. The tenant is recovered from the looked-up
+    # incident itself. Every authenticated route passes tenant_id instead.
     incident = get_incident(report_id)
     if incident is None:
         return JSONResponse({"ok": False, "ignored": f"no report found for {report_id}"})

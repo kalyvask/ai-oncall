@@ -217,12 +217,27 @@ def save_incident(
     return row
 
 
-def get_incident(report_id: str, *, db_path: Path | None = None) -> Optional[IncidentRow]:
+def get_incident(
+    report_id: str, *, tenant_id: str | None = None, db_path: Path | None = None
+) -> Optional[IncidentRow]:
+    """Fetch a single incident by id.
+
+    When ``tenant_id`` is given, a row belonging to a different tenant is
+    treated as not found (returns ``None``). Callers serving an authenticated
+    request should always pass it so cross-tenant reads are impossible at the
+    store layer rather than relying on a follow-up check at every call site.
+    The Slack event path is the one legitimate caller that omits it, because
+    the tenant is recovered *from* the looked-up incident."""
     with _conn(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM incidents WHERE report_id = ?", (report_id,))
         rec = cursor.fetchone()
-    return _row_to_model(rec) if rec else None
+    if rec is None:
+        return None
+    row = _row_to_model(rec)
+    if tenant_id is not None and row.tenant_id != tenant_id:
+        return None
+    return row
 
 
 def list_incidents(

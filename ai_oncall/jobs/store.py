@@ -262,11 +262,21 @@ def fail(
         return _row_to_record(cur.fetchone())
 
 
-def get_job(job_id: str, *, db_path: Path | None = None) -> Optional[JobRecord]:
+def get_job(
+    job_id: str, *, tenant_id: str | None = None, db_path: Path | None = None
+) -> Optional[JobRecord]:
+    """Fetch a single job by id. When ``tenant_id`` is given, a job owned by a
+    different tenant is treated as not found (returns ``None``) so isolation is
+    enforced at the store layer instead of at each call site."""
     with _conn(db_path) as conn:
         cur = conn.execute("SELECT * FROM jobs WHERE job_id=?", (job_id,))
         row = cur.fetchone()
-        return _row_to_record(row) if row else None
+        if row is None:
+            return None
+        record = _row_to_record(row)
+        if tenant_id is not None and record.tenant_id != tenant_id:
+            return None
+        return record
 
 
 def list_jobs(

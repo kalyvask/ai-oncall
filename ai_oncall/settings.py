@@ -125,4 +125,11 @@ def warn_unsafe_settings() -> list[str]:
             "is not. The pipeline will skip posting RCAs to Slack silently — "
             "set the bot token or remove the default channel."
         )
+    if settings.webhook_signing_secret is None:
+        warnings.append(
+            "AI_ONCALL_WEBHOOK_SIGNING_SECRET is unset. The /webhooks/alert "
+            "endpoint accepts unsigned requests, so anyone who can reach it can "
+            "inject alerts and trigger investigations. Set the secret before "
+            "deploying to production."
+        )
     return warnings
