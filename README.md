@@ -131,11 +131,62 @@ CI gate that fails on a > 5 pp metric drop. Details in
 | POST + ACTIONS + THREAD Q&A | `delivery/{slack,send,reactions,cd_dispatch,thread_qa,html}.py` |
 | LEARN + REPLAY | `learnings/`, `agent/replay.py` |
 
-Every state-changing action is appended to a tamper-evident SHA-256 audit
-chain (`ai-oncall audit verify`). Prompts pass through PII/secret
-redaction before reaching the model. All storage rows carry `tenant_id`
-and the store filters on it at query time; identity is the deployment's
-job, there is no login screen.
+Prompts pass through PII/secret redaction before reaching the model. All
+storage rows carry `tenant_id` and the store filters on it at query time;
+identity is the deployment's job, there is no login screen.
+
+## Designed for trust
+
+An agent that touches production has to earn the right to act. Four
+mechanisms do that here.
+
+### Calibrated abstention
+
+Four deterministic rules in `agent/calibration.py` override the LLM's own
+confidence when the evidence does not support a verdict: `cold_start` (no
+telemetry baseline for the service), `confidence_floor` (top hypothesis
+below threshold), `budget_exhausted` (the 8-call cap was hit before the
+trail converged), and `two_strong_leads` (two hypotheses too close to
+call). When a rule fires, the report escalates to a human instead of
+guessing, and the top confidence is capped at 0.40 so Slack and the
+dashboard render an unambiguous low-confidence state. The rules are code,
+not prompt instructions; the model cannot talk its way past them.
+
+### Staged actions behind an audit chain
+
+Remediation never executes silently. Every action is staged into a tier:
+`recommend` (text only), `propose` (a Slack approve button a human must
+click), or `auto` (whitelisted runbooks only). An approved rollback is
+HMAC-signed before it reaches your CD system, and refuses to send
+unsigned. Every state-changing action is appended to `data/audit.jsonl`
+with five governance fields (intent, contextual state, policy decision,
+execution boundaries, actual outcome) linked by a SHA-256 hash chain:
+`record_hash = sha256(prev_hash || canonical_json(fields))`. `ai-oncall
+audit verify` re-walks the chain and reports the first broken index,
+which detects insertion, deletion, edit, or reordering without separate
+signing infrastructure.
+
+### Mistakes become regression tests
+
+A thumbs-down or "wrong root cause" reaction in Slack is not just logged.
+`ai-oncall feedback-export` turns each negative reaction into an eval
+fixture, so the exact incident the agent got wrong joins the regression
+suite. `ai-oncall replay <report_id>` re-runs the full pipeline on any
+stored incident and diffs the result against the original (verdict:
+match, drift, regression, improvement). It exits non-zero on regression
+(`--fail-on-regression`, batch mode via `--batch-from`), built to run in
+CI against a curated incident list so a prompt or model change that
+quietly degrades one fault family fails the build instead of shipping.
+
+### Memory with trust tiers
+
+Every report is persisted into a typed memory graph: `(tenant, service)
+-> root_cause_class` counts that give `get_past_incidents` a per-service
+prior ("payment has seen 4 deploy regressions this quarter"). Rows carry
+a trust tier — `local` (this tenant only, the default), `aggregated`
+(opted into cross-tenant priors), `verified` (a human confirmed the RCA)
+— so cross-tenant learning is opt-in and human-confirmed signal is
+distinguishable from the agent's own guesses.
 
 ## Repo layout
 
