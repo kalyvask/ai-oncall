@@ -30,9 +30,9 @@ CATALOG: dict[str, ModelSpec] = {
     },
     "claude-opus": {
         "provider": "anthropic",
-        "id": "claude-opus-4-7",
-        "input_per_million": 15.0,
-        "output_per_million": 75.0,
+        "id": "claude-opus-4-8",
+        "input_per_million": 5.0,
+        "output_per_million": 25.0,
     },
     "mock": {
         "provider": "mock",

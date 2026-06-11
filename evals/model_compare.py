@@ -115,6 +115,17 @@ def _build_prompt(alert: Alert, expected: RcaReport) -> str:
     )
 
 
+def _strip_fences(raw: str) -> str:
+    """Remove a surrounding markdown code fence if present. Some models wrap
+    JSON in ```json ... ``` despite the JSON-only instruction."""
+    text = raw.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1] if "\n" in text else ""
+        if text.rstrip().endswith("```"):
+            text = text.rstrip()[: -len("```")]
+    return text.strip()
+
+
 def _parse_response(
     raw_text: str, alert: Alert, model_id: str
 ) -> tuple[RcaReport | None, str | None]:
@@ -122,7 +133,7 @@ def _parse_response(
     if not raw_text:
         return None, "empty response"
     try:
-        payload = json.loads(raw_text)
+        payload = json.loads(_strip_fences(raw_text))
     except json.JSONDecodeError as exc:
         return None, f"JSONDecodeError: {exc}"
     try:
