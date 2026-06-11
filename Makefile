@@ -1,4 +1,4 @@
-.PHONY: install test lint type contracts eval
+.PHONY: install test lint type contracts eval demo
 
 install:
 	pip install -e ".[dev]"
@@ -19,3 +19,6 @@ contracts:
 
 eval:
 	python -m evals.harness
+
+demo:
+	python scripts/demo.py

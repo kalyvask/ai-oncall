@@ -221,7 +221,15 @@ def get_client() -> LlmClient:
       (mapped through CATALOG by ID, defaulting to claude-haiku).
     - ``mock`` (default) -> empty MockLlm.
     - ``openai`` -> currently not implemented; returns mock with a warning.
+
+    ``AI_ONCALL_DEMO=1`` overrides the provider with a MockLlm preloaded
+    with the bundled checkout-regression case so the full pipeline runs
+    without credentials (see scripts/demo.py).
     """
+    if os.environ.get("AI_ONCALL_DEMO") == "1":
+        from ai_oncall.llm.demo_fixtures import demo_client
+
+        return demo_client()
     provider = settings.llm_provider
     if provider == "anthropic":
         if not os.environ.get("ANTHROPIC_API_KEY"):
