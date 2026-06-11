@@ -1,7 +1,7 @@
 [project]
 name = "ai-oncall"
-version = "0.0.1"
-description = "Diagnoses production incidents using an LLM. See BRIEF.md."
+version = "0.1.0"
+description = "Diagnoses production incidents using an LLM. See docs/BRIEF.md."
 requires-python = ">=3.11"
 dependencies = [
   "pydantic>=2.7",
